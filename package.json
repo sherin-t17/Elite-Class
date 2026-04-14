@@ -1,0 +1,16 @@
+{
+  "name": "elite-class",
+  "version": "1.0.0",
+  "description": "Elite Class — Gamified Classroom Management",
+  "scripts": {
+    "frontend": "node scripts/serve-frontend.js",
+    "dev": "cd backend && npm run dev",
+    "start": "cd backend && npm start",
+    "start:backend": "cd backend && npm start",
+    "install-backend": "cd backend && npm install",
+    "setup": "cd backend && npm install"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

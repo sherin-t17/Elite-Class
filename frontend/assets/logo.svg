@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f2260"/>
+      <stop offset="100%" stop-color="#2553c7"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffd700"/>
+      <stop offset="100%" stop-color="#ff9500"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- Decorative geometric lines -->
+  <line x1="64" y1="64" x2="448" y2="64" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <line x1="64" y1="448" x2="448" y2="448" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <!-- Crown shape -->
+  <path d="M 160 340 L 140 220 L 200 270 L 256 180 L 312 270 L 372 220 L 352 340 Z" fill="url(#gold)" opacity="0.95"/>
+  <!-- Crown gems -->
+  <circle cx="140" cy="220" r="14" fill="#ffc926"/>
+  <circle cx="372" cy="220" r="14" fill="#ffc926"/>
+  <circle cx="256" cy="180" r="18" fill="#fff" opacity="0.95"/>
+  <!-- Graduation cap bar -->
+  <rect x="145" y="340" width="222" height="22" rx="11" fill="url(#gold)"/>
+  <!-- E letter -->
+  <text x="256" y="430" font-family="Georgia, serif" font-size="48" font-weight="900" fill="rgba(255,255,255,0.15)" text-anchor="middle" letter-spacing="12">EC</text>
+</svg>

@@ -1,0 +1,9 @@
+{
+  "name": "elite-class-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node ../scripts/serve-frontend.js",
+    "start": "node ../scripts/serve-frontend.js"
+  }
+}

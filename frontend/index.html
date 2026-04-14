@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a3a8f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Elite Class">
+<meta name="description" content="Elite Class — Gamified Classroom Management Platform">
+<title>Elite Class</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/logo.svg">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+<link rel="stylesheet" href="css/variables.css">
+<link rel="stylesheet" href="css/global.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/animations.css">
+<link rel="stylesheet" href="css/gamification.css">
+<link rel="stylesheet" href="css/mobile.css">
+<link rel="stylesheet" href="css/login.css">
+</head>
+<body>
+
+<!-- ============================================================
+     AUTH CONTAINER
+     ============================================================ -->
+<div id="auth-container">
+  <div class="auth-wrapper" id="auth-wrapper">
+
+    <!-- Background shapes -->
+    <div class="auth-bg-shape"></div>
+    <div class="auth-bg-shape2"></div>
+
+    <!-- ── LOGIN PANEL (left) ── -->
+    <div class="auth-creds signin">
+      <div class="auth-logo-row slide-el">
+        <div class="auth-logo-icon">
+          <img src="assets/logo.svg" alt="Elite Class" onerror="this.parentElement.innerHTML='👑'">
+        </div>
+        <div class="auth-logo-name">Elite Class</div>
+      </div>
+      <h2 class="slide-el">Welcome Back</h2>
+      <p class="auth-brand-sub slide-el">Sign in to your account</p>
+
+      <!-- Role toggle -->
+      <div class="auth-role-toggle slide-el" id="login-role-toggle">
+        <button class="auth-role-btn active" onclick="setLoginRole('teacher',this)">👩‍🏫 Teacher</button>
+        <button class="auth-role-btn" onclick="setLoginRole('student',this)">👨‍🎓 Student</button>
+      </div>
+
+      <div class="auth-field slide-el">
+        <input type="email" id="login-email" required autocomplete="email" onkeydown="if(event.key==='Enter')doLogin()">
+        <label>Email Address</label>
+        <i class="fa-solid fa-envelope"></i>
+      </div>
+
+      <div class="auth-field slide-el">
+        <input type="password" id="login-password" required autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+        <label>Password</label>
+        <i class="fa-solid fa-lock"></i>
+        <button
+          type="button"
+          class="auth-password-toggle"
+          onmousedown="event.preventDefault()"
+          onclick="togglePassword('login-password', this)"
+          aria-label="Show password"
+        >
+          <i class="fa-regular fa-eye"></i>
+        </button>
+      </div>
+
+      <div class="slide-el" style="margin-top:22px">
+        <button class="auth-submit" id="login-btn-el" onclick="doLogin()">Sign In →</button>
+      </div>
+
+      
+
+      <div class="auth-switch slide-el">
+        Don't have an account? <a onclick="showRegister()">Register here</a>
+      </div>
+    </div>
+
+    <!-- ── LOGIN WELCOME (right) ── -->
+    <div class="auth-welcome signin">
+      <div class="slide-el">
+        <h2>Gamified<br>Learning<br>Starts Here</h2>
+      </div>
+      <div class="slide-el">
+        <span class="auth-welcome-tag">Elite Class</span>
+      </div>
+      <div class="slide-el">
+        <p class="auth-welcome-desc">Enjoy your Learning<br>The classroom reimagined.</p>
+      </div>
+    </div>
+
+    <!-- ── REGISTER PANEL (right) ── -->
+    <div class="auth-creds signup">
+      <div class="auth-logo-row slide-el">
+        <div class="auth-logo-icon">
+          <img src="assets/logo.svg" alt="Elite Class" onerror="this.parentElement.innerHTML='👑'">
+        </div>
+        <div class="auth-logo-name">Join Elite Class</div>
+      </div>
+      <h2 class="slide-el">Create Account</h2>
+
+      <!-- Role toggle -->
+      <div class="auth-role-toggle slide-el" id="reg-role-toggle">
+        <button class="auth-role-btn active" onclick="setRegRole('student',this)">👨‍🎓 Student</button>
+        <button class="auth-role-btn" onclick="setRegRole('teacher',this)">👩‍🏫 Teacher</button>
+      </div>
+
+      <div class="auth-field slide-el">
+        <input type="text" id="reg-name" required autocomplete="name">
+        <label>Full Name</label>
+        <i class="fa-solid fa-user"></i>
+      </div>
+
+      <div class="auth-field slide-el">
+        <input type="email" id="reg-email" required autocomplete="email">
+        <label>Email Address</label>
+        <i class="fa-solid fa-envelope"></i>
+      </div>
+
+      <div class="auth-field slide-el">
+        <input type="password" id="reg-password" required autocomplete="new-password">
+        <label>Password</label>
+        <i class="fa-solid fa-lock"></i>
+        <button
+          type="button"
+          class="auth-password-toggle"
+          onmousedown="event.preventDefault()"
+          onclick="togglePassword('reg-password', this)"
+          aria-label="Show password"
+        >
+          <i class="fa-regular fa-eye"></i>
+        </button>
+      </div>
+
+      <div class="auth-field slide-el">
+        <input type="password" id="reg-confirm" required autocomplete="new-password" onkeydown="if(event.key==='Enter')doRegister()">
+        <label>Confirm Password</label>
+        <i class="fa-solid fa-lock"></i>
+        <button
+          type="button"
+          class="auth-password-toggle"
+          onmousedown="event.preventDefault()"
+          onclick="togglePassword('reg-confirm', this)"
+          aria-label="Show password"
+        >
+          <i class="fa-regular fa-eye"></i>
+        </button>
+      </div>
+
+      <div class="slide-el" style="margin-top:22px">
+        <button class="auth-submit" onclick="doRegister()">Create Account →</button>
+      </div>
+
+      <div class="auth-switch slide-el">
+        Already have an account? <a onclick="showLogin()">Sign in here</a>
+      </div>
+    </div>
+
+    <!-- ── REGISTER WELCOME (left) ── -->
+    <div class="auth-welcome signup">
+      <div class="slide-el">
+        <h2>Start Your<br>Journey<br>Today</h2>
+      </div>
+      <div class="slide-el">
+        <span class="auth-welcome-tag">Elite Class</span>
+      </div>
+      <div class="slide-el">
+        <p class="auth-welcome-desc">Earn XP · Unlock Badges<br>Climb the Leaderboard.</p>
+      </div>
+    </div>
+
+  </div><!-- .auth-wrapper -->
+
+  
+</div><!-- #auth-container -->
+
+
+<!-- ============================================================
+     APP SHELL
+     ============================================================ -->
+<div id="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+  <div class="main-area">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="hamburger-btn" id="hamburger-btn" onclick="EC.app.openSidebar()">☰</button>
+        <div class="topbar-title" id="topbar-title">Elite <span>Class</span></div>
+      </div>
+      <div class="topbar-actions">
+
+        <div class="icon-btn" onclick="EC.app.toggleSound()" title="Toggle sound" id="topbar-sound">🔊</div>
+      </div>
+    </header>
+    <main class="page-content" id="page-content-area"></main>
+  </div>
+</div>
+
+<!-- ============================================================
+     GLOBAL OVERLAYS
+     ============================================================ -->
+<div class="levelup-overlay" id="levelup-overlay">
+  <div class="levelup-card">
+    <span class="levelup-icon">🏆</span>
+    <h2>Level Up!</h2>
+    <p>Congratulations! You reached a new level</p>
+    <div class="levelup-level" id="levelup-level-text">Scholar → Elite</div>
+    <button class="btn btn-accent btn-lg" onclick="EC.closeLevelUp()" style="margin:0 auto;display:block">Claim Your Glory! 🎉</button>
+  </div>
+</div>
+
+<div class="booyah-overlay" id="booyah-overlay">
+  <div class="booyah-trophy">🏆</div>
+  <div class="booyah-text">BOOYAH!</div>
+  <div class="booyah-sub" id="booyah-sub">Perfect Score!</div>
+</div>
+
+<div class="streak-overlay" id="streak-overlay">
+  <div class="streak-text">DOUBLE XP! 🔥</div>
+  <div class="streak-sub"></div>
+</div>
+
+<div class="badge-unlock-overlay" id="badge-unlock-overlay" onclick="EC.closeBadgeUnlock()">
+  <div class="badge-unlock-card" onclick="event.stopPropagation()">
+    <div class="badge-unlock-label">🎖️ New Badge Unlocked!</div>
+    <div class="badge-unlock-icon" id="badge-unlock-icon">⚡</div>
+    <div class="badge-unlock-name" id="badge-unlock-name">Speed Demon</div>
+    <div class="badge-unlock-desc" id="badge-unlock-desc">Submitted 5 tasks more than 24h early</div>
+    <div class="badge-rarity-tag legendary" id="badge-rarity-tag">Legendary</div>
+    <button class="btn btn-accent btn-lg" onclick="EC.closeBadgeUnlock()">Awesome! ✨</button>
+  </div>
+</div>
+
+<div class="claim-toast" id="claim-toast"></div>
+<canvas id="confetti-canvas"></canvas>
+<div class="xp-popup" id="xp-popup">+120 XP ⭐</div>
+<div id="toast-container"></div>
+
+<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
+<script src="js/state.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/shared/sound.js"></script>
+<script src="js/shared/animations.js"></script>
+<script src="js/shared/notifications.js"></script>
+<script src="js/shared/upload.js"></script>
+<script src="js/shared/chat.js"></script>
+<script src="js/shared/gamification.js"></script>
+<script src="js/shared/seasons.js"></script>
+<script src="js/teacher/dashboard.js"></script>
+<script src="js/teacher/tasks.js"></script>
+<script src="js/teacher/month-tasks.js"></script>
+<script src="js/teacher/gradebook.js"></script>
+<script src="js/teacher/attendance.js"></script>
+<script src="js/teacher/leave-od.js"></script>
+<script src="js/teacher/explanations.js"></script>
+<script src="js/teacher/students.js"></script>
+<script src="js/teacher/poll.js"></script>
+<script src="js/teacher/announcements.js"></script>
+<script src="js/teacher/squad.js"></script>
+<script src="js/teacher/export.js"></script>
+<script src="js/teacher/schedule.js"></script>
+<script src="js/student/resources.js"></script>
+<script src="js/teacher/resources.js"></script>
+<script src="js/student/dashboard.js"></script>
+<script src="js/student/tasks.js"></script>
+<script src="js/student/month-tasks.js"></script>
+<script src="js/student/profile.js"></script>
+<script src="js/student/leaderboard.js"></script>
+<script src="js/student/attendance.js"></script>
+<script src="js/student/leave-od.js"></script>
+<script src="js/student/poll.js"></script>
+<script src="js/student/schedule.js"></script>
+<script src="js/student/announcements.js"></script>
+<script src="js/app.js"></script>
+
+<script>
+/* ── AUTH LOGIC ── */
+let loginRole = 'teacher';
+let regRole   = 'student';
+
+function setLoginRole(role, el) {
+  loginRole = role;
+  document.querySelectorAll('#login-role-toggle .auth-role-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+function setRegRole(role, el) {
+  regRole = role;
+  document.querySelectorAll('#reg-role-toggle .auth-role-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+
+
+function togglePassword(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const isPassword = input.type === 'password';
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  input.type = isPassword ? 'text' : 'password';
+  btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+  btn.innerHTML = `<i class="fa-regular ${isPassword ? 'fa-eye-slash' : 'fa-eye'}"></i>`;
+  input.focus();
+  if (start !== null && end !== null) {
+    input.setSelectionRange(start, end);
+  }
+}
+
+async function doLogin() {
+  const btn   = document.getElementById('login-btn-el');
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  if (!email || !pass) { EC.toast('Enter email and password', 'danger'); return; }
+  btn.textContent = 'Signing in...';
+  btn.disabled = true;
+  const ok = await EC.auth.login(email, pass, loginRole);
+  if (ok) {
+    try {
+      await EC.app.launch();
+    } catch (error) {
+      console.error('Launch failed:', error);
+      EC.auth.logout();
+      EC.toast(error?.message || 'Signed in, but the app could not finish loading.', 'danger');
+      btn.textContent = 'Sign In ->';
+      btn.disabled = false;
+    }
+  } else {
+    btn.textContent = 'Sign In ->';
+    btn.disabled = false;
+  }
+}
+
+async function doRegister() {
+  const name    = document.getElementById('reg-name').value.trim();
+  const email   = document.getElementById('reg-email').value.trim();
+  const pass    = document.getElementById('reg-password').value;
+  const confirm = document.getElementById('reg-confirm').value;
+  if (!name || !email || !pass) { EC.toast('Fill in all fields', 'danger'); return; }
+  if (pass !== confirm)          { EC.toast('Passwords do not match', 'danger'); return; }
+  if (pass.length < 6)           { EC.toast('Password must be at least 6 characters', 'danger'); return; }
+  const ok = await EC.auth.register(name, email, pass, regRole);
+  if (ok) showLogin();
+}
+
+function showRegister() {
+  document.getElementById('auth-wrapper').classList.add('toggled');
+}
+function showLogin() {
+  document.getElementById('auth-wrapper').classList.remove('toggled');
+}
+
+/* ── APP LAUNCH hides auth ── */
+const _origLaunch = null;
+document.addEventListener('DOMContentLoaded', () => {
+  EC.app.init();
+});
+</script>
+</body>
+</html>
