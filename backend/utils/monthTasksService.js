@@ -325,6 +325,10 @@ function normalizeNeedsSubmission(value) {
   return ['yes', 'true', '1', 'y'].includes(normalized);
 }
 
+function normalizeFrequency(value) {
+  return String(value || '').trim().toLowerCase() === 'daily' ? 'daily' : 'once';
+}
+
 async function buildTeacherOverview(batchId) {
   const [students, stats, batch] = await Promise.all([
     User.find({ role: 'student' }).select('name initials color'),
@@ -361,7 +365,12 @@ async function resolveExtension(batchId, studentId, dateKey) {
   const batch = await MonthTaskBatch.findById(batchId);
   if (!batch) return null;
   return batch.deadlineExtensions
-    .filter(entry => entry.student.toString() === String(studentId) && entry.dateKey === dateKey)
+    .filter((entry) => {
+      const appliesToStudent = entry.appliesToAllStudents
+        || (entry.student && entry.student.toString() === String(studentId));
+      const appliesToDate = entry.scope === 'all' || entry.dateKey === dateKey;
+      return appliesToStudent && appliesToDate;
+    })
     .sort((a, b) => new Date(b.extendedUntil) - new Date(a.extendedUntil))[0] || null;
 }
 
@@ -502,23 +511,40 @@ async function runStreakJob() {
   }
 }
 
-async function createExtension({ batchId, studentId, leaveRequestId, justification, dateKey, teacherId }) {
+async function createExtension({ batchId, studentId, leaveRequestId, justification, dateKey, teacherId, scope }) {
   const [batch, leaveRequest] = await Promise.all([
     MonthTaskBatch.findById(batchId),
-    LeaveRequest.findById(leaveRequestId)
+    leaveRequestId ? LeaveRequest.findById(leaveRequestId) : null
   ]);
   if (!batch) throw new Error('Batch not found');
-  if (!leaveRequest || leaveRequest.status !== 'approved' || leaveRequest.student.toString() !== String(studentId)) {
+
+  const normalizedScope = scope === 'all' ? 'all' : 'date';
+  const appliesToAllStudents = String(studentId) === 'all';
+  const needsApprovedLeave = !appliesToAllStudents && normalizedScope === 'date';
+
+  if (
+    needsApprovedLeave
+    && (!leaveRequest || leaveRequest.status !== 'approved' || leaveRequest.student.toString() !== String(studentId))
+  ) {
     throw new Error('An approved Leave/OD request for this student is required.');
   }
 
-  const baseDate = parseDateKey(dateKey);
-  const extendedUntil = endOfDay(new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + 1));
+  if ((!dateKey && normalizedScope === 'date') || (!justification && (appliesToAllStudents || normalizedScope === 'all'))) {
+    throw new Error('Provide a valid date and justification for this extension.');
+  }
+
+  const baseDate = dateKey ? parseDateKey(dateKey) : getBatchWindow(batch).start;
+  const batchWindow = getBatchWindow(batch);
+  const extendedUntil = normalizedScope === 'all'
+    ? endOfDay(batchWindow.end)
+    : endOfDay(new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + 1));
   batch.deadlineExtensions.push({
-    student: studentId,
-    leaveRequest: leaveRequestId,
+    student: appliesToAllStudents ? null : studentId,
+    leaveRequest: leaveRequestId || null,
     justification,
-    dateKey,
+    dateKey: normalizedScope === 'all' ? '' : dateKey,
+    scope: normalizedScope,
+    appliesToAllStudents,
     extendedUntil,
     createdBy: teacherId
   });
@@ -538,6 +564,7 @@ module.exports = {
   getDailySummary,
   getLeaderboard,
   normalizeDifficulty,
+  normalizeFrequency,
   normalizeNeedsSubmission,
   rebuildStudentStat,
   runDailyTopperJob,

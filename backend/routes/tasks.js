@@ -5,19 +5,36 @@ const Submission = require('../models/Submission');
 const User = require('../models/User');
 const { verifyToken } = require('../middleware/auth');
 const { teacherOnly, studentOnly } = require('../middleware/roleCheck');
+const os = require('os');
 const { awardXp, updateAllRanks } = require('../utils/xpEngine');
-const { uploadBuffer } = require('../utils/fileStorage');
+const { uploadBuffer, uploadFile } = require('../utils/fileStorage');
 const router = express.Router();
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, os.tmpdir());
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
 
 // Get all tasks
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const [tasks, submissionCounts, pendingSubmissionCounts, totalStudents] = await Promise.all([
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const [tasks, totalTasks, submissionCounts, pendingSubmissionCounts, totalStudents] = await Promise.all([
       Task.find()
         .populate('createdBy')
-        .populate('choices.takenBy', 'name initials'),
+        .populate('choices.takenBy', 'name initials')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Task.countDocuments(),
       Submission.aggregate([
         { $group: { _id: '$task', count: { $sum: 1 } } }
       ]),
@@ -35,26 +52,33 @@ router.get('/', verifyToken, async (req, res) => {
       pendingSubmissionCounts.map(entry => [entry._id.toString(), entry.count])
     );
 
-    if (req.user.role === 'student') {
-      const submissions = await Submission.find({ student: req.user.id });
-      const tasksWithStatus = tasks.map(task => ({
-        ...task.toObject(),
+    const data = tasks.map(task => {
+      const taskObj = task.toObject();
+      return {
+        ...taskObj,
         completions: countsByTask.get(task._id.toString()) || 0,
         pendingGradingCount: pendingCountsByTask.get(task._id.toString()) || 0,
-        total: task.totalStudents || totalStudents,
+        total: task.totalStudents || totalStudents
+      };
+    });
+
+    if (req.user.role === 'student') {
+      const submissions = await Submission.find({ student: req.user.id, task: { $in: tasks.map(t => t._id) } });
+      const tasksWithStatus = data.map(task => ({
+        ...task,
         submission: submissions.find(s => s.task.toString() === task._id.toString())
       }));
-      return res.json({ success: true, data: tasksWithStatus });
+      return res.json({
+        success: true,
+        data: tasksWithStatus,
+        pagination: { page, limit, total: totalTasks }
+      });
     }
 
     res.json({
       success: true,
-      data: tasks.map(task => ({
-        ...task.toObject(),
-        completions: countsByTask.get(task._id.toString()) || 0,
-        pendingGradingCount: pendingCountsByTask.get(task._id.toString()) || 0,
-        total: task.totalStudents || totalStudents
-      }))
+      data,
+      pagination: { page, limit, total: totalTasks }
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -163,7 +187,7 @@ router.post('/:id/submit', verifyToken, studentOnly, upload.single('file'), asyn
     let fileName = null;
 
     if (req.file) {
-      const result = await uploadBuffer(req, req.file, 'tasks');
+      const result = await uploadFile(req, req.file, 'tasks');
       fileUrl = result.secure_url;
       fileName = req.file.originalname;
     }
@@ -288,6 +312,33 @@ router.get('/:id/submissions', verifyToken, teacherOnly, async (req, res) => {
       .populate('student')
       .populate('gradedBy');
     res.json({ success: true, data: submissions });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Get all pending submissions across all tasks
+router.get('/submissions/pending', verifyToken, teacherOnly, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const [submissions, total] = await Promise.all([
+      Submission.find({ status: { $in: ['submitted', 'late'] } })
+        .populate('student', 'name initials color profileImageUrl')
+        .populate('task', 'title xp due')
+        .sort({ submittedAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Submission.countDocuments({ status: { $in: ['submitted', 'late'] } })
+    ]);
+
+    res.json({
+      success: true,
+      data: submissions,
+      pagination: { page, limit, total }
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

@@ -27,6 +27,6 @@ const MonthTaskSubmissionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-MonthTaskSubmissionSchema.index({ student: 1, task: 1 }, { unique: true });
+MonthTaskSubmissionSchema.index({ student: 1, task: 1, date: 1 }, { unique: true });
 
 module.exports = mongoose.model('MonthTaskSubmission', MonthTaskSubmissionSchema);

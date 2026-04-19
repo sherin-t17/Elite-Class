@@ -14,13 +14,11 @@ router.get('/', verifyToken, async (req, res) => {
     let attendance = await Attendance.findOne({ date }).populate('records.student');
 
     if (!attendance) {
-      const students = await User.find({ role: 'student' });
-      attendance = new Attendance({
+      const students = await User.find({ role: 'student' }).select('name');
+      attendance = {
         date,
         records: students.map(s => ({ student: s._id, status: 'absent' }))
-      });
-      await attendance.save();
-      await attendance.populate('records.student');
+      };
     }
 
     res.json({ success: true, data: attendance });
@@ -36,15 +34,11 @@ router.post('/', verifyToken, teacherOnly, async (req, res) => {
     const attendanceDate = new Date(date);
     attendanceDate.setHours(0, 0, 0, 0);
 
-    let attendance = await Attendance.findOne({ date: attendanceDate });
-    if (!attendance) {
-      attendance = new Attendance({ date: attendanceDate, records, markedBy: req.user.id });
-    } else {
-      attendance.records = records;
-      attendance.markedBy = req.user.id;
-    }
-
-    await attendance.save();
+    const attendance = await Attendance.findOneAndUpdate(
+      { date: attendanceDate },
+      { $set: { records, markedBy: req.user.id } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
     await attendance.populate('records.student');
     res.json({ success: true, data: attendance });
   } catch (err) {

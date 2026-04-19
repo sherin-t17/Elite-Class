@@ -55,7 +55,7 @@ EC.upload = {
     if (!el) return;
 
     el.innerHTML = `
-      <div class="submit-area" id="${containerId}-zone">
+      <div class="submit-area" id="${containerId}-zone" role="button" tabindex="0" aria-label="Upload file" style="cursor:pointer">
         <div class="si">📎</div>
         <div style="font-weight:600;font-size:14px;margin-bottom:4px">Drop your file here or click to browse</div>
         <div style="font-size:12px;color:var(--text-muted)">PDF, DOCX, XLSX, PPTX, Images, Videos • Max ${EC.upload.MAX_SIZE_MB}MB</div>
@@ -75,6 +75,12 @@ EC.upload = {
     const input = el.querySelector(`#${containerId}-input`);
 
     zone.addEventListener('click', () => input.click());
+    zone.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        input.click();
+      }
+    });
     zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.style.borderColor='var(--royal)'; zone.style.background='var(--royal-soft)'; });
     zone.addEventListener('dragleave', () => { zone.style.borderColor=''; zone.style.background=''; });
     zone.addEventListener('drop', (e) => {

@@ -17,10 +17,12 @@ const MonthTaskBatchSchema = new mongoose.Schema(
     },
     deadlineExtensions: [
       {
-        student: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+        student: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         leaveRequest: { type: mongoose.Schema.Types.ObjectId, ref: 'LeaveRequest', default: null },
         justification: { type: String, default: '' },
-        dateKey: { type: String, required: true },
+        dateKey: { type: String, default: '' },
+        scope: { type: String, enum: ['date', 'all'], default: 'date' },
+        appliesToAllStudents: { type: Boolean, default: false },
         extendedUntil: { type: Date, required: true },
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
         createdAt: { type: Date, default: Date.now }

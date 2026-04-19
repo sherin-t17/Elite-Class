@@ -9,6 +9,13 @@ const MonthTaskSchema = new mongoose.Schema(
     difficulty: { type: String, enum: ['Easy', 'Medium', 'Hard'], default: 'Medium' },
     marks: { type: Number, default: 0 },
     category: { type: String, default: 'General' },
+    taskDate: { type: String, default: '' },
+    taskLink: { type: String, default: '' },
+    frequency: {
+      type: String,
+      enum: ['once', 'daily'],
+      default: 'once'
+    },
     needsSubmission: { type: Boolean, default: true },
     answerMode: {
       type: String,

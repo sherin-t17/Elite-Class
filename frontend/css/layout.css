@@ -4,7 +4,7 @@
    ============================================================ */
 
 /* ===== APP SHELL ===== */
-#app { display: none; height: 100vh; flex-direction: row; }
+#app { display: none; height: 100vh; height: 100dvh; min-height: 100vh; min-height: 100dvh; flex-direction: row; }
 #app.visible { display: flex; }
 
 /* ===== SIDEBAR ===== */
@@ -15,6 +15,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
@@ -197,6 +198,7 @@
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
+  min-height: 0;
 }
 
 /* ===== TOPBAR ===== */
@@ -238,8 +240,13 @@
 .page-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 28px;
+  overflow-x: hidden;
+  padding: 20px 22px;
   scroll-behavior: smooth;
+  min-width: 0;
+  min-height: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ===== CARDS ===== */
@@ -272,7 +279,7 @@
 }
 
 /* ===== STAT CARDS ===== */
-.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
 .stat-card {
   background: var(--white);
   border-radius: var(--radius);
@@ -305,9 +312,16 @@
 /* ===== GRID LAYOUTS ===== */
 .two-col       { display: grid; grid-template-columns: 1fr 1fr;     gap: 20px; }
 .three-col     { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-.two-col-wide  { display: grid; grid-template-columns: 2fr 1fr;     gap: 20px; }
-.two-col-tall  { display: grid; grid-template-columns: 1fr 1fr;     gap: 20px; align-items: start; }
+.two-col-wide  { display: grid; grid-template-columns: 2fr 1fr;     gap: 16px; }
+.two-col-tall  { display: grid; grid-template-columns: 1fr 1fr;     gap: 16px; align-items: start; }
 .four-col      { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.two-col > *,
+.three-col > *,
+.two-col-wide > *,
+.two-col-tall > *,
+.four-col > * {
+  min-width: 0;
+}
 
 /* ===== OVERLAY / MODAL ===== */
 .overlay {
@@ -425,11 +439,169 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   gap: 16px;
   flex-wrap: wrap;
 }
 .page-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.scroll-panel {
+  max-height: 320px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.page-content table {
+  border-collapse: collapse;
+}
+
+.workbook-actions {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.workbook-shell { align-items: start; }
+.workbook-header { margin-bottom: 14px; }
+.workbook-actions { gap: 6px; }
+.workbook-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.workbook-caption {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.workbook-sheet-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--royal);
+}
+.workbook-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.workbook-inline-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.workbook-grid-wrap {
+  padding: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.workbook-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  min-width: 0;
+}
+.workbook-tab {
+  border: 1px solid var(--border);
+  background: var(--white);
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text-mid);
+}
+.workbook-tab.active {
+  background: var(--royal-soft);
+  border-color: var(--royal-light);
+  color: var(--royal);
+  font-weight: 700;
+}
+.workbook-access-row,
+.workbook-note {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13px;
+  color: var(--text-mid);
+}
+.workbook-note:last-child,
+.workbook-access-row:last-child {
+  border-bottom: none;
+}
+.workbook-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-mid);
+}
+.workbook-permission-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+.excel-grid {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+.excel-grid th,
+.excel-grid td {
+  border: 1px solid var(--border);
+}
+.excel-grid th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 2;
+  padding: 8px 10px;
+  text-align: left;
+}
+.excel-index {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  z-index: 1;
+  min-width: 44px;
+  width: 44px;
+  font-weight: 700;
+}
+.excel-cell {
+  min-width: 120px;
+  height: 38px;
+  background: var(--white);
+  cursor: pointer;
+  vertical-align: top;
+}
+.excel-cell.active {
+  box-shadow: inset 0 0 0 2px rgba(59,130,246,.35);
+  background: rgba(59,130,246,.06);
+}
+.excel-cell.readonly {
+  background: rgba(148,163,184,.08);
+}
+.excel-cell-text {
+  padding: 9px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.excel-cell-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 9px 10px;
+  font: inherit;
+  color: var(--text);
+}
 
 /* ===== SECTION HEADING ===== */
 .section-title {

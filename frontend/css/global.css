@@ -13,6 +13,17 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+body {
+  min-width: 320px;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
 /* ===== SCROLLBAR ===== */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

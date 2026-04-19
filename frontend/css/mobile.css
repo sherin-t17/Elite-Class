@@ -1,149 +1,362 @@
 /* ============================================================
-   ELITE CLASS — MOBILE RESPONSIVE STYLES
-   Supports all screen sizes from 320px to desktop
+   ELITE CLASS - RESPONSIVE LAYOUT
+   Shared responsive rules for tablet, mobile, workbook, and tables
    ============================================================ */
 
-/* ===== TABLET (≤1024px) ===== */
+/* ===== TABLET (<=1024px) ===== */
 @media (max-width: 1024px) {
   :root { --sidebar-w: 220px; }
+
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .three-col  { grid-template-columns: 1fr 1fr; }
-  .four-col   { grid-template-columns: 1fr 1fr; }
-  .page-content { padding: 20px 20px; }
+  .three-col,
+  .four-col,
+  .two-col-wide,
+  .workbook-shell { grid-template-columns: 1fr; }
+
+  .page-content { padding: 20px; }
+  .page-header-actions { width: 100%; }
+
+  .workbook-inline-actions {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .workbook-inline-actions .form-input {
+    min-width: 220px;
+    flex: 1 1 220px;
+  }
+
+  .workbook-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .workbook-tab {
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
 }
 
-/* ===== MOBILE (≤768px) ===== */
+/* ===== MOBILE (<=768px) ===== */
 @media (max-width: 768px) {
   html, body { overflow: hidden; }
 
-  /* Sidebar becomes a slide-in drawer */
+  #app,
+  #app.visible,
+  .main-area {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
   .sidebar {
     position: fixed;
-    left: 0; top: 0; bottom: 0;
+    left: 0;
+    top: 0;
+    bottom: 0;
     z-index: var(--z-overlay);
     transform: translateX(-100%);
     transition: transform var(--t-med);
     width: 260px;
     min-width: 260px;
+    max-width: calc(100vw - 48px);
+    box-shadow: 16px 0 40px rgba(13,26,62,0.28);
   }
+
   .sidebar.open { transform: translateX(0); }
+  .sidebar-backdrop.show { display: block; }
   .hamburger-btn { display: flex !important; }
 
-  /* Main area fills full width */
-  .main-area { width: 100%; }
+  .main-area {
+    width: 100%;
+    min-width: 0;
+  }
+
   #app.visible { flex-direction: column; }
 
-  /* Page content */
-  .page-content { padding: 16px; }
+  .page-content {
+    padding: 16px;
+    overflow-x: hidden;
+  }
 
-  /* Stats */
-  .stats-grid    { grid-template-columns: 1fr 1fr; gap: 10px; }
-  .stat-value    { font-size: 22px; }
+  .page-content > * { min-width: 0; }
 
-  /* Grids */
-  .two-col, .two-col-wide, .two-col-tall { grid-template-columns: 1fr; }
-  .three-col     { grid-template-columns: 1fr; }
-  .four-col      { grid-template-columns: 1fr 1fr; }
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
 
-  /* Topbar */
-  .topbar { padding: 0 16px; }
-  .topbar-title { font-size: 17px; }
+  .stat-card { padding: 16px; }
+  .stat-value { font-size: 22px; }
 
-  /* Chat layout stacks */
+  .two-col,
+  .two-col-wide,
+  .two-col-tall,
+  .three-col { grid-template-columns: 1fr; }
+
+  .four-col { grid-template-columns: 1fr 1fr; }
+
+  .topbar {
+    padding: 0 16px;
+    gap: 8px;
+  }
+
+  .topbar-title {
+    font-size: 17px;
+    min-width: 0;
+  }
+
+  .topbar-left,
+  .topbar-actions { min-width: 0; }
+
   .chat-sidebar { display: none; }
-  .chat-layout  { flex-direction: column; }
+  .chat-layout { flex-direction: column; }
 
-  /* Gradebook scrolls horizontally */
-  .gradebook-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .gradebook-wrapper,
+  .workbook-grid-wrap,
+  .scroll-panel,
+  .page-content div[style*="overflow:auto"],
+  .page-content div[style*="overflow: auto"] {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
 
-  /* Modals */
-  .modal, .srp { width: 100% !important; max-width: 100% !important; border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important; }
-  .overlay { align-items: flex-end; padding: 0; }
+  .page-content table,
+  .gradebook-table,
+  .excel-grid {
+    width: max-content !important;
+    min-width: 100%;
+  }
 
-  /* Forms */
-  .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; }
+  .modal,
+  .srp {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
+  }
 
-  /* Battle pass */
-  .bp-milestones { gap: 0; }
-  .bp-milestone  { width: 34px; height: 34px; font-size: 14px; }
+  .overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
 
-  /* Profile */
+  .form-grid-2,
+  .form-grid-3 { grid-template-columns: 1fr; }
+
+  .form-input,
+  .form-select,
+  .form-textarea { min-width: 0; }
+
   .profile-banner { height: 120px; }
-  .profile-name   { font-size: 18px; }
+  .profile-name { font-size: 18px; }
 
-  /* BOOYAH text */
-  .booyah-text    { font-size: 52px; }
-  .streak-text    { font-size: 36px; }
+  .booyah-text { font-size: 52px; }
+  .streak-text { font-size: 36px; }
 
-  /* Filter bar */
-  .filter-bar { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
-  .filter-bar::-webkit-scrollbar { height: 0; }
+  .filter-bar,
+  .tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+  }
 
-  /* Page header */
-  .page-header { flex-direction: column; align-items: flex-start; }
-  .page-header-actions { width: 100%; justify-content: flex-end; }
-
-  /* Hero roles */
-  .hero-roles-grid { grid-template-columns: repeat(3, 1fr); }
-
-  /* Tabs */
-  .tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .filter-bar::-webkit-scrollbar,
   .tabs::-webkit-scrollbar { height: 0; }
+
   .tab-btn { white-space: nowrap; }
 
-  /* Leave request */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .page-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .page-header-actions > .btn,
+  .page-header-actions > button,
+  .page-header-actions > a {
+    max-width: 100%;
+  }
+
+  .hero-roles-grid { grid-template-columns: repeat(3, 1fr); }
   .leave-request-card { flex-direction: column; }
   .leave-actions { flex-wrap: wrap; }
-
-  /* HoF */
-  .hof-entries { gap: 10px; }
-  .hof-entry   { min-width: 140px; }
-
-  /* Notif popup */
+  .hof-entry { min-width: 140px; }
   .notif-popup { right: 8px; left: 8px; width: auto; }
-
-  /* Logout */
   .sidebar-footer-btn { font-size: 11px; }
+
+  .workbook-toolbar { align-items: stretch; }
+
+  .workbook-inline-actions {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .workbook-inline-actions .form-input,
+  .workbook-inline-actions .btn {
+    width: 100%;
+  }
+
+  .workbook-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .workbook-actions .btn {
+    flex: 1 1 120px;
+  }
+
+  .workbook-grid-wrap {
+    margin: 0 -20px;
+    padding: 0 20px;
+  }
+
+  .excel-index {
+    min-width: 40px;
+    width: 40px;
+  }
+
+  .excel-cell { min-width: 110px; }
+
+  .card-header,
+  .card-body,
+  .card-footer { min-width: 0; }
+
+  .card-header { flex-wrap: wrap; }
+
+  .btn-group {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .btn-group > * { max-width: 100%; }
+
+  .avatar-lg {
+    width: 48px;
+    height: 48px;
+    font-size: 18px;
+  }
+
+  .avatar-xl {
+    width: 68px;
+    height: 68px;
+    font-size: 24px;
+  }
 }
 
-/* ===== SMALL MOBILE (≤480px) ===== */
+/* ===== SMALL MOBILE (<=480px) ===== */
 @media (max-width: 480px) {
-  .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
-  .stat-card  { padding: 14px; }
-  .stat-value { font-size: 20px; }
-  .stat-icon  { font-size: 22px; }
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
 
-  .page-title   { font-size: 20px; }
+  .stat-card { padding: 14px; }
+  .stat-value { font-size: 20px; }
+  .stat-icon { font-size: 22px; }
+
+  .page-title { font-size: 20px; }
   .topbar-title { font-size: 16px; }
 
   .choice-task-grid { grid-template-columns: repeat(3, 1fr); }
   .badge-grid { grid-template-columns: repeat(4, 1fr); }
   .hero-roles-grid { grid-template-columns: repeat(2, 1fr); }
+  .four-col { grid-template-columns: 1fr; }
 
-  .btn-xl { padding: 13px 24px; font-size: 15px; }
-  .btn-lg { padding: 11px 20px; font-size: 15px; }
+  .page-header-actions .btn,
+  .page-header-actions button,
+  .page-header-actions a {
+    width: 100%;
+  }
+
+  .btn,
+  .btn-sm,
+  .btn-lg,
+  .btn-xl {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .topbar { padding: 0 12px; }
+
+  .icon-btn,
+  .hamburger-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .card-header,
+  .card-body,
+  .card-footer {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .workbook-grid-wrap {
+    margin: 0 -14px;
+    padding: 0 14px;
+  }
+
+  .excel-cell { min-width: 96px; }
+
+  .avatar-sm {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+  }
+
+  .avatar-md {
+    width: 36px;
+    height: 36px;
+    font-size: 13px;
+  }
+
+  .avatar-lg {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
+
+  .avatar-xl {
+    width: 60px;
+    height: 60px;
+    font-size: 20px;
+  }
 
   .booyah-text { font-size: 42px; }
   .levelup-card h2 { font-size: 40px; }
 }
 
-/* ===== VERY SMALL (≤360px) ===== */
+/* ===== VERY SMALL (<=360px) ===== */
 @media (max-width: 360px) {
   :root { --header-h: 56px; }
-  .stats-grid  { grid-template-columns: 1fr 1fr; }
+
+  .stats-grid { grid-template-columns: 1fr; }
   .page-content { padding: 12px; }
-  .topbar      { padding: 0 12px; }
+  .topbar { padding: 0 12px; }
+  .topbar-title { font-size: 15px; }
+  .workbook-actions .btn { flex-basis: 100%; }
 }
 
 /* ===== LANDSCAPE MOBILE ===== */
 @media (max-width: 768px) and (orientation: landscape) {
-  .sidebar { width: 220px; min-width: 220px; }
-  .page-content { padding: 12px 16px; }
+  .sidebar {
+    width: 220px;
+    min-width: 220px;
+  }
+
+  .page-content {
+    padding: 12px 16px;
+  }
 }
 
-/* ===== LARGE DESKTOP (≥1400px) ===== */
+/* ===== LARGE DESKTOP (>=1400px) ===== */
 @media (min-width: 1400px) {
-  .stats-grid   { grid-template-columns: repeat(4, 1fr); }
+  .stats-grid { grid-template-columns: repeat(4, 1fr); }
   .page-content { padding: 28px 36px; }
 }
 
@@ -152,12 +365,15 @@
   .task-item:hover { transform: none; box-shadow: var(--shadow); }
   .stat-card:hover { transform: none; }
   .btn:hover::after { background: transparent; }
-  .nav-item:hover  { background: transparent; }
+  .nav-item:hover { background: transparent; }
 }
 
 /* ===== PRINT ===== */
 @media print {
-  .sidebar, .topbar, .sidebar-backdrop { display: none !important; }
+  .sidebar,
+  .topbar,
+  .sidebar-backdrop { display: none !important; }
+
   .main-area { width: 100%; }
   .page-content { padding: 0; overflow: visible; }
   body { overflow: auto; }

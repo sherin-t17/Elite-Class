@@ -1,5 +1,4 @@
 const User = require('../models/User');
-const Squad = require('../models/Squad');
 
 exports.getLeaderboard = async (req, res) => {
   try {
@@ -34,13 +33,6 @@ exports.getLeaderboard = async (req, res) => {
         .sort({ level: -1, xp: -1 })
         .limit(50);
       return res.json({ success: true, data: students });
-    }
-
-    if (type === 'squads') {
-      const squads = await Squad.find()
-        .populate('members')
-        .sort({ rank: 1 });
-      return res.json({ success: true, data: squads });
     }
 
     res.json({ success: true, data: [] });

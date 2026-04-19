@@ -1,11 +1,13 @@
 window.EC = window.EC || {};
 
 EC.teacherGradebook = {
+  previousPage: 'tasks',
   async render(el) {
     el.innerHTML = `
       <div class="page-header">
         <div><h2 class="page-title">Gradebook</h2><p class="page-subtitle">Submission status, grades and teacher feedback across the class.</p></div>
         <div class="page-header-actions">
+          <button class="btn btn-outline" onclick="EC.navigate('${this.previousPage || 'tasks'}')">Back</button>
           <button class="export-btn pdf" onclick="EC.api.exportPdf('gradebook')">Export PDF</button>
           <button class="export-btn excel" onclick="EC.api.exportExcel('gradebook')">Export Excel</button>
         </div>
@@ -20,6 +22,7 @@ EC.teacherGradebook = {
         <div class="page-header">
           <div><h2 class="page-title">Gradebook</h2><p class="page-subtitle">Submission status, grades and teacher feedback across the class.</p></div>
           <div class="page-header-actions">
+            <button class="btn btn-outline" onclick="EC.navigate('${this.previousPage || 'tasks'}')">Back</button>
             <button class="export-btn pdf" onclick="EC.api.exportPdf('gradebook')">Export PDF</button>
             <button class="export-btn excel" onclick="EC.api.exportExcel('gradebook')">Export Excel</button>
           </div>

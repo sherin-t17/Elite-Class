@@ -122,7 +122,7 @@ EC.teacherTasks = {
         ? `<div style="text-align:center;padding:40px;color:var(--text-muted)">No submissions yet</div>`
         : submittedStudents.map(s => `
             <div style="display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--border-soft)">
-              <div class="avatar avatar-sm" style="background:${s.color}">${s.initials}</div>
+              <div class="avatar avatar-sm" style="background:${s.color};background-image:url('${EC.getProfileImageUrl(s)}');background-size:cover;background-position:center;color:transparent;">${s.initials}</div>
               <div style="flex:1">
                 <div style="font-weight:600">${s.name}</div>
                 <div style="font-size:12px;color:var(--text-muted)">📎 submission.pdf &nbsp;|&nbsp; 🕐 ${EC.teacherTasks._fakeTime(s.id)}</div>
@@ -137,7 +137,7 @@ EC.teacherTasks = {
         ? `<div style="text-align:center;padding:40px;color:var(--text-muted)">All students submitted! 🎉</div>`
         : notSubmittedStudents.map(s => `
             <div style="display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--border-soft)">
-              <div class="avatar avatar-sm" style="background:${s.color}">${s.initials}</div>
+              <div class="avatar avatar-sm" style="background:${s.color};background-image:url('${EC.getProfileImageUrl(s)}');background-size:cover;background-position:center;color:transparent;">${s.initials}</div>
               <div style="flex:1">
                 <div style="font-weight:600">${s.name}</div>
                 <div style="font-size:12px;color:var(--danger)">Not submitted yet</div>
@@ -441,7 +441,7 @@ EC.teacherTasks.showDetailTab = function(tab) {
       ? `<div style="text-align:center;padding:40px;color:var(--text-muted)">No submissions yet</div>`
       : submittedStudents.map(submission => `
           <div style="display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:16px 24px;border-bottom:1px solid var(--border-soft)">
-            <div class="avatar avatar-sm" style="background:${submission.studentColor}">${submission.studentInitials}</div>
+            <div class="avatar avatar-sm" style="background:${EC.getStudent(submission.studentId)?.color || submission.studentColor};background-image:url('${EC.getProfileImageUrl(EC.getStudent(submission.studentId) || { profileImageUrl: '', name: submission.studentName, initials: submission.studentInitials, color: submission.studentColor })}');background-size:cover;background-position:center;color:transparent;">${submission.studentInitials}</div>
             <div>
               <div style="font-weight:700">${submission.studentName || 'Student'}</div>
               <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${submission.fileName || 'No file name'} • ${formatDateTime(submission.submittedAt)}</div>
@@ -461,7 +461,7 @@ EC.teacherTasks.showDetailTab = function(tab) {
     ? `<div style="text-align:center;padding:40px;color:var(--text-muted)">All students submitted.</div>`
     : notSubmittedStudents.map(student => `
         <div style="display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--border-soft)">
-          <div class="avatar avatar-sm" style="background:${student.color}">${student.initials}</div>
+          <div class="avatar avatar-sm" style="background:${student.color};background-image:url('${EC.getProfileImageUrl(student)}');background-size:cover;background-position:center;color:transparent;">${student.initials}</div>
           <div style="flex:1">
             <div style="font-weight:600">${student.name}</div>
             <div style="font-size:12px;color:var(--danger)">Not submitted yet</div>
@@ -555,7 +555,7 @@ EC.teacherTasks.showDetailTab = function(tab) {
       ? `<div style="text-align:center;padding:40px;color:var(--text-muted)">No submissions yet</div>`
       : submissions.map(submission => `
           <div style="display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;padding:16px 24px;border-bottom:1px solid var(--border-soft)">
-            <div class="avatar avatar-sm" style="background:${submission.studentColor}">${submission.studentInitials}</div>
+            <div class="avatar avatar-sm" style="background:${submission.studentColor};background-image:url('${EC.getProfileImageUrl(EC.getStudent(submission.studentId) || { name: submission.studentName, profileImageUrl: '', color: submission.studentColor })}');background-size:cover;background-position:center;color:transparent;">${submission.studentInitials}</div>
             <div>
               <div style="font-weight:700">${submission.studentName || 'Student'}</div>
               <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${submission.fileName || submission.proofUrl || 'No file or link'} • ${formatDateTime(submission.submittedAt)}</div>
@@ -578,7 +578,7 @@ EC.teacherTasks.showDetailTab = function(tab) {
     ? `<div style="text-align:center;padding:40px;color:var(--text-muted)">All students submitted.</div>`
     : notSubmittedStudents.map(student => `
         <div style="display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--border-soft)">
-          <div class="avatar avatar-sm" style="background:${student.color}">${student.initials}</div>
+          <div class="avatar avatar-sm" style="background:${student.color};background-image:url('${EC.getProfileImageUrl(student)}');background-size:cover;background-position:center;color:transparent;">${student.initials}</div>
           <div style="flex:1">
             <div style="font-weight:600">${student.name}</div>
             <div style="font-size:12px;color:var(--danger)">Not submitted yet</div>
@@ -657,7 +657,7 @@ EC.teacherTasks.requestRedo = async function() {
 EC.teacherTasks.renderTaskCard = function(t) {
   const pct = t.total > 0 ? Math.round((t.completions / t.total) * 100) : 0;
   return `
-    <div class="task-item priority-${t.priority ? 'high' : 'low'}" onclick="EC.teacherTasks.openTaskDetail('${String(t.id)}')">
+    <div class="task-item priority-${t.priority ? 'high' : 'low'}" id="task-card-${t.id}" onclick="EC.teacherTasks.openTaskDetail('${String(t.id)}')">
       <div class="task-left">
         <div class="task-title-row">
           <span class="task-name">${t.title}</span>
@@ -684,6 +684,18 @@ EC.teacherTasks.renderTaskCard = function(t) {
   `;
 };
 
+EC.teacherTasks.updateTaskCard = function(taskId) {
+  const task = EC.state.tasks.find(t => String(t.id) === String(taskId));
+  if (!task) return;
+  const card = document.getElementById(`task-card-${taskId}`);
+  if (card) {
+    const parent = card.parentElement;
+    const temp = document.createElement('div');
+    temp.innerHTML = this.renderTaskCard(task);
+    parent.replaceChild(temp.firstElementChild, card);
+  }
+};
+
 EC.teacherTasks.filter = function(btn, type) {
   EC.teacherTasks.applyFilter(btn, type);
 };
@@ -694,7 +706,6 @@ EC.teacherTasks.applyFilter = async function(btn, type) {
 
   try {
     EC.state.tasks = await EC.api.getTasks();
-    await EC.teacherTasks.refreshTaskSubmissionStats();
   } catch (err) {
     EC.toast(err.message || 'Could not refresh tasks', 'danger');
   }
@@ -712,7 +723,6 @@ EC.teacherTasks.applyFilter = async function(btn, type) {
 EC.teacherTasks.render = async function(el) {
   try {
     EC.state.tasks = await EC.api.getTasks();
-    await EC.teacherTasks.refreshTaskSubmissionStats();
   } catch (err) {
     EC.toast(err.message || 'Could not load tasks', 'danger');
   }
@@ -722,6 +732,7 @@ EC.teacherTasks.render = async function(el) {
     <div class="page-header">
       <div><h2 class="page-title">Task Manager</h2><p class="page-subtitle">Create, monitor and grade all class tasks</p></div>
       <div class="page-header-actions">
+        <button class="btn btn-outline" onclick="EC.teacherGradebook.previousPage='tasks';EC.navigate('gradebook')">Gradebook</button>
         <button class="btn btn-accent" onclick="EC.teacherTasks.openCreate()">+ New Task</button>
       </div>
     </div>
@@ -742,17 +753,5 @@ EC.teacherTasks.render = async function(el) {
 };
 
 EC.teacherTasks.refreshTaskSubmissionStats = async function() {
-  const tasks = EC.state.tasks || [];
-  const results = await Promise.allSettled(
-    tasks.map(task => EC.api.getTaskSubmissions(task.id))
-  );
-
-  results.forEach((result, index) => {
-    if (result.status !== 'fulfilled') return;
-    const submissions = result.value || [];
-    const task = tasks[index];
-    if (!task) return;
-    task.completions = submissions.length;
-    task.pendingGradingCount = submissions.filter(entry => ['submitted', 'late'].includes(entry.status)).length;
-  });
+  return;
 };

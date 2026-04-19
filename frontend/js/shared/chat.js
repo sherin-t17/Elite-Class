@@ -86,6 +86,7 @@ EC.chat = {
     const isMe = String(message.fromId || '') === myId;
     const messageId = String(message.id).replace(/'/g, "\\'");
     const reactionCount = Number(message.reactionCount || 0);
+    const reactedByMe = Boolean(message.reactedByMe);
     const reactionHtml = reactionCount
       ? `<div class="msg-reactions-bar"><span class="msg-react" onclick="EC.chat.react('${messageId}')">👍🏼 ${reactionCount}</span></div>`
       : '';
@@ -179,7 +180,7 @@ EC.chat = {
       const updated = await EC.api.reactChatMessage(id);
       const messages = this.getMessages().map(message =>
         String(message.id) === String(id)
-          ? { ...message, reactionCount: updated.reactionCount }
+          ? { ...message, reactionCount: updated.reactionCount, reactedByMe: updated.reactedByMe }
           : message
       );
       this.setMessages(this.currentContext, messages);

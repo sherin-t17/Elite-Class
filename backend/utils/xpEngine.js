@@ -1,6 +1,5 @@
 const User = require('../models/User');
-const Squad = require('../models/Squad');
-const { checkBadges } = require('./badgeEngine');
+const { badgeRuleEngine } = require('./badgeEngine');
 
 const LEVEL_THRESHOLDS = {
   'Initiate': 0,
@@ -25,13 +24,7 @@ exports.awardXp = async (userId, amount, reason) => {
   // Update ranks
   await exports.updateAllRanks();
 
-  // Update squad XP if student
-  if (user.role === 'student') {
-    await exports.updateSquadXp(userId);
-  }
-
-  // Check badges
-  await checkBadges(userId);
+  await badgeRuleEngine(userId);
 
   return user;
 };
@@ -52,20 +45,6 @@ exports.updateAllRanks = async () => {
   }
 };
 
-exports.updateSquadXp = async (userId) => {
-  const squad = await Squad.findOne({ members: userId });
-  if (!squad) return;
-
-  const members = await User.find({ _id: { $in: squad.members } });
-  const totalXp = members.reduce((sum, m) => sum + m.xp, 0);
-  squad.totalXp = totalXp;
-
-  const allSquads = await Squad.find().sort({ totalXp: -1 });
-  squad.rank = allSquads.findIndex(s => s._id.toString() === squad._id.toString()) + 1;
-
-  await squad.save();
-};
-
 exports.updateStreaks = async () => {
   const users = await User.find({ role: 'student' });
   const today = new Date();
@@ -73,18 +52,23 @@ exports.updateStreaks = async () => {
 
   for (const user of users) {
     const lastActive = user.lastActiveDate ? new Date(user.lastActiveDate) : null;
+    let shouldAwardStreakBonus = false;
+
     if (lastActive) {
       lastActive.setHours(0, 0, 0, 0);
       const daysDiff = Math.floor((today - lastActive) / (1000 * 60 * 60 * 24));
 
       if (daysDiff === 1) {
         user.streak += 1;
-        await exports.awardXp(user._id, 5, 'Streak bonus');
+        shouldAwardStreakBonus = true;
       } else if (daysDiff > 1) {
         user.streak = 0;
       }
     }
     user.lastActiveDate = new Date();
     await user.save();
+
+    if (shouldAwardStreakBonus) await exports.awardXp(user._id, 5, 'Streak bonus');
+    else await badgeRuleEngine(user._id);
   }
 };

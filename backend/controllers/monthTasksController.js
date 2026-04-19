@@ -1,5 +1,6 @@
 const ExcelJS = require('exceljs');
 const multer = require('multer');
+const os = require('os');
 const MonthTask = require('../models/MonthTask');
 const MonthTaskBatch = require('../models/MonthTaskBatch');
 const Badge = require('../models/Badge');
@@ -18,12 +19,25 @@ const {
   getDailySummary,
   getLeaderboard,
   normalizeDifficulty,
+  normalizeFrequency,
   normalizeNeedsSubmission,
   rebuildStudentStat
 } = require('../utils/monthTasksService');
-const { uploadBuffer } = require('../utils/fileStorage');
+const { uploadBuffer, uploadFile } = require('../utils/fileStorage');
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, os.tmpdir());
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
+const excelUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }
+});
 
 function monthTaskTitle(batch) {
   return `${batch.monthName} ${batch.year} Month Tasks`;
@@ -58,12 +72,26 @@ function normalizeTask(task) {
     difficulty: task.difficulty,
     marks: task.marks,
     category: task.category,
+    taskDate: task.taskDate || '',
+    taskLink: task.taskLink || '',
+    frequency: task.frequency || 'once',
     needsSubmission: task.needsSubmission,
     answerMode: task.answerMode || (task.needsSubmission ? 'file' : 'done'),
     allowLinkSubmission: Boolean(task.allowLinkSubmission),
     allowTextSubmission: Boolean(task.allowTextSubmission),
     allowFileUpload: task.allowFileUpload !== false,
     createdAt: task.createdAt
+  };
+}
+
+function buildSubmissionSettings(answerMode, needsSubmission) {
+  const mode = answerMode || (needsSubmission ? 'file' : 'done');
+  return {
+    needsSubmission,
+    answerMode: mode,
+    allowFileUpload: mode === 'file' || mode === 'mixed',
+    allowLinkSubmission: mode === 'link_text' || mode === 'mixed',
+    allowTextSubmission: mode === 'link_text' || mode === 'mixed'
   };
 }
 
@@ -116,6 +144,16 @@ function monthHasEnded(batch) {
   return new Date() > monthEnd;
 }
 
+function normalizeRequestedDateKey(value) {
+  const raw = String(value || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : '';
+}
+
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 async function ensureMonthLegendBadge(studentId, batch, stat, submissions) {
   if (!studentId || !batch || !stat || !monthHasEnded(batch)) return null;
   if ((stat.totalCompleted || 0) < (batch.totalTasks || 0)) return null;
@@ -159,17 +197,35 @@ async function ensureMonthLegendBadge(studentId, batch, stat, submissions) {
 }
 
 exports.uploadMiddleware = upload.single('file');
-exports.excelUploadMiddleware = upload.single('file');
+exports.excelUploadMiddleware = excelUpload.single('file');
 
 exports.listBatches = async (req, res) => {
   try {
-    const batches = await MonthTaskBatch.find().sort({ year: -1, createdAt: -1 });
-    const activeBatch = await getActiveBatch();
+    const page = parsePositiveInteger(req.query.page, 1);
+    const limit = parsePositiveInteger(req.query.limit, 0);
+    const skip = limit > 0 ? (page - 1) * limit : 0;
+
+    const [total, batches, activeBatch] = await Promise.all([
+      MonthTaskBatch.countDocuments(),
+      MonthTaskBatch.find()
+        .sort({ year: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit > 0 ? limit : 0),
+      getActiveBatch()
+    ]);
+
+    const effectiveLimit = limit > 0 ? limit : total || 1;
     res.json({
       success: true,
       data: {
         activeBatchId: activeBatch?._id || null,
-        batches: batches.map(normalizeBatch)
+        batches: batches.map(normalizeBatch),
+        pagination: {
+          page,
+          limit: effectiveLimit,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / effectiveLimit))
+        }
       }
     });
   } catch (err) {
@@ -232,9 +288,8 @@ exports.updateBatch = async (req, res) => {
 
 exports.getBatch = async (req, res) => {
   try {
-    const [batch, taskCount, todaySummary, leaderboard, dailyToppers] = await Promise.all([
+    const [batch, todaySummary, leaderboard, dailyToppers] = await Promise.all([
       MonthTaskBatch.findById(req.params.id).populate('topPerformerOverride.student', 'name initials color'),
-      MonthTask.countDocuments({ batch: req.params.id }),
       getDailySummary(req.params.id, formatDateKey(new Date())),
       getLeaderboard(req.params.id),
       MonthTaskDailyTopper.find({ batch: req.params.id, date: formatDateKey(new Date()) })
@@ -248,7 +303,7 @@ exports.getBatch = async (req, res) => {
       success: true,
       data: {
         ...normalizeBatch(batch),
-        totalTasks: batch.totalTasks || taskCount,
+        totalTasks: batch.totalTasks || 0,
         leaderboard,
         todaySummary,
         dailyTopPerformers: dailyToppers.map(entry => ({
@@ -280,15 +335,16 @@ exports.createTask = async (req, res) => {
       difficulty: normalizeDifficulty(req.body.difficulty),
       marks: Number(req.body.marks || 0),
       category: req.body.category || 'General',
-      needsSubmission: Boolean(req.body.needsSubmission),
-      answerMode: req.body.answerMode || (Boolean(req.body.needsSubmission) ? 'file' : 'done'),
-      allowLinkSubmission: Boolean(req.body.allowLinkSubmission),
-      allowTextSubmission: Boolean(req.body.allowTextSubmission),
-      allowFileUpload: req.body.allowFileUpload !== false,
+      taskDate: String(req.body.taskDate || '').trim(),
+      taskLink: String(req.body.taskLink || '').trim(),
+      frequency: normalizeFrequency(req.body.frequency),
+      ...buildSubmissionSettings(
+        req.body.answerMode,
+        Boolean(req.body.needsSubmission)
+      ),
       createdBy: req.user.id
     });
-    batch.totalTasks = await MonthTask.countDocuments({ batch: batch._id });
-    await batch.save();
+    await MonthTaskBatch.findByIdAndUpdate(batch._id, { $inc: { totalTasks: 1 } });
     res.status(201).json({ success: true, data: normalizeTask(task) });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -324,27 +380,44 @@ exports.uploadExcel = async (req, res) => {
         difficulty: normalizeDifficulty(values[4]),
         marks: Number(values[5] || 0),
         category: String(values[6] || 'General').trim(),
-        needsSubmission: normalizeNeedsSubmission(values[7]),
-        answerMode: normalizeNeedsSubmission(values[7]) ? 'file' : 'done',
-        allowFileUpload: normalizeNeedsSubmission(values[7]),
-        allowLinkSubmission: false,
-        allowTextSubmission: false
+        taskDate: String(values[10] || '').trim(),
+        taskLink: String(values[11] || '').trim(),
+        ...buildSubmissionSettings(
+          String(values[8] || '').trim().toLowerCase() || undefined,
+          normalizeNeedsSubmission(values[7])
+        ),
+        frequency: normalizeFrequency(values[9])
       });
     });
 
-    const tasks = [];
+    let createdCount = 0;
     for (const row of created) {
       if (!row.taskNumber || !row.title) continue;
-      const task = await MonthTask.findOneAndUpdate(
+      const result = await MonthTask.updateOne(
         { batch: batch._id, taskNumber: row.taskNumber },
-        { ...row, batch: batch._id, createdBy: req.user.id },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
+        {
+          $set: row,
+          $setOnInsert: {
+            batch: batch._id,
+            createdBy: req.user.id
+          }
+        },
+        { upsert: true, setDefaultsOnInsert: true }
       );
-      tasks.push(task);
+      createdCount += result.upsertedCount || 0;
     }
 
-    batch.totalTasks = await MonthTask.countDocuments({ batch: batch._id });
-    await batch.save();
+    if (createdCount > 0) {
+      await MonthTaskBatch.findByIdAndUpdate(batch._id, { $inc: { totalTasks: createdCount } });
+    }
+
+    const taskNumbers = created
+      .filter(row => row.taskNumber && row.title)
+      .map(row => row.taskNumber);
+    const tasks = await MonthTask.find({
+      batch: batch._id,
+      taskNumber: { $in: taskNumbers }
+    }).sort({ taskNumber: 1 });
 
     res.json({
       success: true,
@@ -362,17 +435,30 @@ exports.getBatchTasks = async (req, res) => {
   try {
     const tasks = await MonthTask.find({ batch: req.params.id }).sort({ taskNumber: 1 });
     const submissions = req.user.role === 'student'
-      ? await MonthTaskSubmission.find({ batch: req.params.id, student: req.user.id })
+      ? await MonthTaskSubmission.find({ batch: req.params.id, student: req.user.id }).sort({ date: -1, updatedAt: -1 })
       : [];
-    const submissionMap = new Map(submissions.map(entry => [entry.task.toString(), entry]));
+    const selectedDateKey = normalizeRequestedDateKey(req.query.date) || formatDateKey(adjustToSubmissionDate(new Date()));
+    const submissionsByTask = submissions.reduce((map, entry) => {
+      const key = entry.task.toString();
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(entry);
+      return map;
+    }, new Map());
 
     res.json({
       success: true,
       data: tasks.map(task => ({
         ...normalizeTask(task),
-        submission: submissionMap.has(task._id.toString())
-          ? normalizeSubmission(submissionMap.get(task._id.toString()))
-          : null
+        completedDays: (submissionsByTask.get(task._id.toString()) || []).filter((entry) =>
+          ['submitted', 'approved', 'self_declared'].includes(entry.status)
+        ).length,
+        submission: (() => {
+          const taskSubmissions = submissionsByTask.get(task._id.toString()) || [];
+          const currentSubmission = task.frequency === 'daily'
+            ? taskSubmissions.find((entry) => entry.date === selectedDateKey) || null
+            : taskSubmissions[0] || null;
+          return currentSubmission ? normalizeSubmission(currentSubmission) : null;
+        })()
       }))
     });
   } catch (err) {
@@ -387,8 +473,13 @@ exports.startTask = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Task not found' });
     }
 
-    const dateKey = formatDateKey(adjustToSubmissionDate(new Date()));
-    let submission = await MonthTaskSubmission.findOne({ student: req.user.id, task: task._id });
+    const dateKey = normalizeRequestedDateKey(req.body.date)
+      || formatDateKey(adjustToSubmissionDate(new Date()));
+    let submission = await MonthTaskSubmission.findOne(
+      task.frequency === 'daily'
+        ? { student: req.user.id, task: task._id, date: dateKey }
+        : { student: req.user.id, task: task._id }
+    ).sort({ date: -1, updatedAt: -1 });
     if (!submission) {
       submission = await MonthTaskSubmission.create({
         student: req.user.id,
@@ -419,16 +510,21 @@ exports.submitTask = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Task not found' });
     }
 
-    const dateKey = formatDateKey(adjustToSubmissionDate(new Date()));
+    const dateKey = normalizeRequestedDateKey(req.body.date)
+      || formatDateKey(adjustToSubmissionDate(new Date()));
     let proofFileUrl = '';
     let proofFileName = '';
     if (req.file) {
-      const uploaded = await uploadBuffer(req, req.file, 'month-tasks');
+      const uploaded = await uploadFile(req, req.file, 'month-tasks');
       proofFileUrl = uploaded.secure_url;
       proofFileName = req.file.originalname;
     }
 
-    let submission = await MonthTaskSubmission.findOne({ student: req.user.id, task: task._id });
+    let submission = await MonthTaskSubmission.findOne(
+      task.frequency === 'daily'
+        ? { student: req.user.id, task: task._id, date: dateKey }
+        : { student: req.user.id, task: task._id }
+    ).sort({ date: -1, updatedAt: -1 });
     if (!submission) {
       submission = new MonthTaskSubmission({
         student: req.user.id,
@@ -468,18 +564,17 @@ exports.updateTask = async (req, res) => {
     task.difficulty = normalizeDifficulty(req.body.difficulty || task.difficulty);
     task.marks = Number(req.body.marks ?? task.marks);
     task.category = req.body.category ?? task.category;
-    task.needsSubmission = Boolean(req.body.needsSubmission);
-    task.answerMode = req.body.answerMode || (task.needsSubmission ? 'file' : 'done');
-    task.allowLinkSubmission = Boolean(req.body.allowLinkSubmission);
-    task.allowTextSubmission = Boolean(req.body.allowTextSubmission);
-    task.allowFileUpload = req.body.allowFileUpload !== false;
+    task.taskDate = String(req.body.taskDate ?? task.taskDate ?? '').trim();
+    task.taskLink = String(req.body.taskLink ?? task.taskLink ?? '').trim();
+    task.frequency = normalizeFrequency(req.body.frequency || task.frequency);
+    Object.assign(
+      task,
+      buildSubmissionSettings(
+        req.body.answerMode || task.answerMode,
+        req.body.needsSubmission === undefined ? task.needsSubmission : Boolean(req.body.needsSubmission)
+      )
+    );
     await task.save();
-
-    const batch = await MonthTaskBatch.findById(task.batch);
-    if (batch) {
-      batch.totalTasks = await MonthTask.countDocuments({ batch: batch._id });
-      await batch.save();
-    }
 
     res.json({ success: true, data: normalizeTask(task) });
   } catch (err) {
@@ -496,12 +591,7 @@ exports.deleteTask = async (req, res) => {
 
     await MonthTaskSubmission.deleteMany({ task: task._id });
     await MonthTask.findByIdAndDelete(task._id);
-
-    const batch = await MonthTaskBatch.findById(task.batch);
-    if (batch) {
-      batch.totalTasks = await MonthTask.countDocuments({ batch: batch._id });
-      await batch.save();
-    }
+    await MonthTaskBatch.findByIdAndUpdate(task.batch, { $inc: { totalTasks: -1 } });
 
     res.json({ success: true, message: 'Task deleted' });
   } catch (err) {
@@ -708,6 +798,7 @@ exports.extendDeadline = async (req, res) => {
       leaveRequestId: req.body.leaveRequestId,
       justification: req.body.justification || '',
       dateKey: req.body.date,
+      scope: req.body.scope,
       teacherId: req.user.id
     });
     res.status(201).json({ success: true, data: extension });

@@ -4,20 +4,20 @@ EC.teacherDashboard = {
   render(el) {
     const s = EC.state;
     const alertStudents = s.students.filter(student => student.tasks < 12);
-    const totalPresent = s.attendance.records.filter(record => record.status === 'present').length;
     const pendingLeave = s.leaveRequests.filter(request => request.status === 'pending').length;
     const topStudent = s.students[0];
     const hasExamSchedule = Number.isFinite(Number(s.examDays)) && Number(s.examDays) >= 0 && Boolean(s.nextExam);
+    const submittedTasks = s.tasks.filter(task => task.completions > 0).length;
 
     el.innerHTML = `
       <div class="stats-grid animate-in">
         <div class="stat-card blue"><div class="stat-icon">👥</div><div class="stat-value">${s.students.length}</div><div class="stat-label">Total Students</div><div class="stat-change up">Active class</div></div>
-        <div class="stat-card green"><div class="stat-icon">✅</div><div class="stat-value">${totalPresent}/${s.students.length}</div><div class="stat-label">Present Today</div><div class="stat-change up">${s.students.length ? Math.round((totalPresent / s.students.length) * 100) : 0}% attendance</div></div>
-        <div class="stat-card yellow"><div class="stat-icon">📋</div><div class="stat-value">${s.tasks.length}</div><div class="stat-label">Active Tasks</div><div class="stat-change up">${s.tasks.filter(task => task.completions > 0).length} with submissions</div></div>
+        <div class="stat-card green"><div class="stat-icon">🚀</div><div class="stat-value">${submittedTasks}</div><div class="stat-label">Tasks With Submissions</div><div class="stat-change up">${s.tasks.length} active task${s.tasks.length === 1 ? '' : 's'}</div></div>
+        <div class="stat-card yellow"><div class="stat-icon">📋</div><div class="stat-value">${s.tasks.length}</div><div class="stat-label">Active Tasks</div><div class="stat-change up">${submittedTasks} with submissions</div></div>
         <div class="stat-card red"><div class="stat-icon">⚠️</div><div class="stat-value">${alertStudents.length}</div><div class="stat-label">Students Behind</div><div class="stat-change down">Need attention</div></div>
       </div>
 
-      <div class="two-col animate-in animate-in-delay-2" style="margin-bottom:24px">
+      <div class="two-col animate-in animate-in-delay-2" style="margin-bottom:16px">
         ${hasExamSchedule
           ? `<div class="exam-countdown">
               <div class="countdown-icon">📚</div>
@@ -65,7 +65,7 @@ EC.teacherDashboard = {
               <div class="card-body">
                 ${alertStudents.map(student => `
                   <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--danger-bg);border-radius:var(--radius-sm);border-left:3px solid var(--danger);margin-bottom:8px">
-                    <div class="avatar avatar-sm" style="background:${student.color}">${student.initials}</div>
+                    <div class="avatar avatar-sm" style="background:${student.color};background-image:url('${EC.getProfileImageUrl(student)}');background-size:cover;background-position:center;color:transparent;">${student.initials}</div>
                     <div style="flex:1"><div style="font-weight:600;font-size:13px">${student.name}</div><div style="font-size:12px;color:var(--danger)">Only ${student.tasks} tasks • missing work</div></div>
                     <button class="btn btn-outline btn-sm" onclick="EC.navigate('students')">View</button>
                   </div>
@@ -102,10 +102,10 @@ EC.teacherDashboard = {
               <div class="card-body">
                 ${s.leaveRequests.filter(request => request.status === 'pending').map(request => `
                   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-                    <div class="avatar avatar-sm">${request.studentName.split(' ').map(part => part[0]).join('')}</div>
+                    <div class="avatar avatar-sm" style="background:${EC.getStudent(request.studentId)?.color || '#1a3a8f'};background-image:url('${EC.getProfileImageUrl(EC.getStudent(request.studentId) || { name: request.studentName, profileImageUrl: '' })}');background-size:cover;background-position:center;color:transparent;">${request.studentName.split(' ').map(part => part[0]).join('')}</div>
                     <div style="flex:1"><div style="font-weight:600;font-size:13px">${request.studentName}</div><div style="font-size:12px;color:var(--text-muted)">${request.type.toUpperCase()} • ${request.date}</div></div>
                     <button class="btn btn-success btn-sm" onclick="EC.teacherLeave.approve('${request.id}')">✓</button>
-                    <button class="btn btn-danger btn-sm" onclick="EC.teacherLeave.openReject('${request.id}')">✗</button>
+                    <button class="btn btn-danger btn-sm" onclick="EC.teacherLeave.openReject('${request.id}')">✕</button>
                   </div>
                 `).join('')}
                 <button class="btn btn-outline btn-sm w-full mt-8" onclick="EC.navigate('leave-od')">Manage All</button>
@@ -114,9 +114,6 @@ EC.teacherDashboard = {
           ` : ''}
         </div>
       </div>
-      <div id="daily-missions-container" class="mt-20 animate-in animate-in-delay-3"></div>
     `;
-
-    EC.dailyMissions.render(document.getElementById('daily-missions-container'));
   }
 };

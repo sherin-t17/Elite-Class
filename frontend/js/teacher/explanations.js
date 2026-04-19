@@ -12,6 +12,8 @@ EC.teacherExplanations = {
     `;
     try {
       const warnings = await EC.api.getMonthTaskWarnings();
+      EC.state.monthTaskWarnings = warnings || [];
+      EC.notifications?.refreshCounts?.();
       const pending = warnings.filter(entry => entry.teacherAction === 'pending');
       document.getElementById('teacher-explanations-root').innerHTML = pending.length
         ? pending.map(entry => `

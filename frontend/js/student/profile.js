@@ -2,8 +2,16 @@ window.EC = window.EC || {};
 
 EC.studentProfile = {
   render(el) {
-    const myId = EC.state.myId || 1;
-    const me = EC.getStudent(myId) || EC.state.students[0];
+    const myId = EC.state.myId || EC.state.currentUser?.id || 1;
+    const existing = EC.getStudent(myId);
+    const currentUser = EC.state.currentUser?.id && String(EC.state.currentUser.id) === String(myId)
+      ? EC.state.currentUser
+      : null;
+    const me = existing || (currentUser ? EC.studentProfile.ensureStudentState(currentUser) : null);
+    if (!me) {
+      el.innerHTML = `<div class="card" style="padding:24px;color:var(--text-muted)">Profile is not available yet.</div>`;
+      return;
+    }
     const xpInfo = EC.xpToNextLevel(me.xp);
 
     if (!me.year && !me.dept) {
@@ -19,29 +27,24 @@ EC.studentProfile = {
         </div>
       </div>
 
-      <div class="card mb-16 animate-in" style="background:linear-gradient(135deg,var(--royal-dark),var(--royal));padding:16px 20px;border-left:4px solid var(--accent)">
-        <div style="font-size:14px;font-weight:600;color:#fff;line-height:1.6">${EC.studentProfile.getMotivationQuote(me)}</div>
-      </div>
-
       <div class="card animate-in" style="overflow:hidden;margin-bottom:16px">
-        <div style="height:100px;background:linear-gradient(135deg,var(--royal-dark),var(--royal-mid),var(--royal-light));position:relative">
+        <div style="height:116px;background:linear-gradient(135deg,var(--royal-dark),var(--royal-mid),var(--royal-light));position:relative">
           <div style="position:absolute;inset:0;background:url('data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\"><defs><pattern id=\"p\" width=\"40\" height=\"40\" patternUnits=\"userSpaceOnUse\"><circle cx=\"20\" cy=\"20\" r=\"1\" fill=\"rgba(255,255,255,0.1)\"/></pattern></defs><rect width=\"100%\" height=\"100%\" fill=\"url(%23p)\"/></svg>')"></div>
         </div>
-        <div style="padding:0 24px 24px;position:relative">
-          <div style="display:flex;align-items:flex-end;gap:16px;margin-top:-32px">
-            <div style="width:72px;height:72px;background:${me.color};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#fff;border:3px solid #fff;box-shadow:0 4px 16px rgba(0,0,0,0.15);flex-shrink:0;${me.profileImageUrl ? `background-image:url('${me.profileImageUrl}');background-size:cover;background-position:center;color:transparent;` : ''}">${me.initials}</div>
-            <div style="padding-bottom:4px;flex:1">
+        <div style="padding:0 24px 24px;position:relative;z-index:1">
+          <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-top:-28px;position:relative;z-index:2">
+            <div style="width:72px;height:72px;background:${me.color};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#fff;border:3px solid #fff;box-shadow:0 4px 16px rgba(0,0,0,0.15);flex-shrink:0;background-image:url('${EC.getProfileImageUrl(me)}');background-size:cover;background-position:center;color:transparent;">${me.initials}</div>
+            <div style="padding:10px 0 4px;flex:1;min-width:220px">
               <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700">${me.name}</div>
-              <div style="font-size:13px;color:var(--text-muted)">${me.year || 'II'} Year &bull; ${me.dept || 'AI & DS'} &bull; Section ${me.section || 'A'} &bull; Reg: ${me.regNo || '20AI001'}</div>
+              <div style="font-size:13px;color:var(--text-muted)">${me.year || '-'} Year &bull; ${me.dept || '-'} &bull; Section ${me.section || '-'} &bull; Reg: ${me.regNo || '-'}</div>
             </div>
           </div>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px" class="animate-in animate-in-delay-1">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px" class="animate-in animate-in-delay-1">
         <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--royal)">${me.xp}</div><div style="font-size:11px;color:var(--text-muted)">Total XP</div></div>
         <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--accent-dark)">#${me.rank}</div><div style="font-size:11px;color:var(--text-muted)">Rank</div></div>
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--success)">${me.attendance}%</div><div style="font-size:11px;color:var(--text-muted)">Attendance</div></div>
         <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--info)">&#x1F525;${me.streak}</div><div style="font-size:11px;color:var(--text-muted)">Day Streak</div></div>
         <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--royal)">${me.tasks}</div><div style="font-size:11px;color:var(--text-muted)">Tasks Done</div></div>
       </div>
@@ -58,7 +61,7 @@ EC.studentProfile = {
       <div class="card mb-16 animate-in animate-in-delay-3" style="padding:20px">
         <div style="font-weight:700;font-size:15px;margin-bottom:14px">&#x1F3D6;&#xFE0F; Badge Showcase</div>
         <div style="display:flex;gap:12px;flex-wrap:wrap">
-          ${EC.state.myBadgeShowcase.map(id => {
+          ${(EC.state.myBadgeShowcase?.length ? EC.state.myBadgeShowcase : (me.badgeShowcase || [])).map(id => {
             const badge = EC.state.badges.find(entry => entry.id === id);
             if (!badge) return '';
             return `<div style="text-align:center;padding:12px;background:var(--surface);border-radius:12px;min-width:80px">
@@ -66,7 +69,7 @@ EC.studentProfile = {
               <div style="font-size:11px;font-weight:700">${badge.name}</div>
               <div style="font-size:10px;color:var(--tier-${badge.rarity});text-transform:capitalize;margin-top:2px">${badge.rarity}</div>
             </div>`;
-          }).join('')}
+          }).join('') || `<div style="font-size:13px;color:var(--text-muted)">Unlocked badges will appear here.</div>`}
         </div>
       </div>
 
@@ -104,6 +107,7 @@ EC.studentProfile = {
             <div style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700">Welcome to Elite Class!</div>
             <div style="font-size:14px;color:var(--text-muted);margin-top:6px">Complete your profile to get started</div>
           </div>
+          <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="setup-name" placeholder="Enter your full name" value="${me.name || ''}"></div>
           <div class="form-group"><label class="form-label">Year</label><select class="form-select" id="setup-year"><option value="">Select</option><option>I</option><option>II</option><option>III</option><option>IV</option></select></div>
           <div class="form-group"><label class="form-label">Department</label><select class="form-select" id="setup-dept"><option value="">Select</option><option>AI &amp; DS</option><option>AI &amp; ML</option><option>CSE</option><option>ECE</option><option>CIVIL</option><option>MECH</option><option>CSBS</option></select></div>
           <div class="form-group"><label class="form-label">Section</label><select class="form-select" id="setup-section"><option value="">Select</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
@@ -114,24 +118,39 @@ EC.studentProfile = {
     `;
   },
 
-  saveSetup() {
+  async saveSetup() {
+    const name = document.getElementById('setup-name')?.value?.trim();
     const year = document.getElementById('setup-year')?.value;
     const dept = document.getElementById('setup-dept')?.value;
     const section = document.getElementById('setup-section')?.value;
     const regNo = document.getElementById('setup-regno')?.value?.trim();
-    if (!year || !dept || !section) {
+    if (!name || !year || !dept || !section || !regNo) {
       EC.toast('Please fill in all fields', 'danger');
       return;
     }
-    const me = EC.getStudent(EC.state.myId || 1);
-    if (me) {
-      me.year = year;
-      me.dept = dept;
-      me.section = section;
-      me.regNo = regNo;
+
+    const me = EC.studentProfile.getCurrentStudent();
+    if (!me?.id) {
+      EC.toast('Could not load your profile. Please sign in again.', 'danger');
+      return;
     }
-    EC.toast('Profile setup complete! \u{1F389}', 'success');
-    EC.studentProfile.render(document.getElementById('page-content-area'));
+
+    try {
+      const updated = await EC.api.updateProfile(me.id, {
+        name,
+        year,
+        dept,
+        section,
+        regNo,
+        profileImageUrl: me.profileImageUrl || ''
+      });
+      EC.studentProfile.syncStudent(updated);
+      EC.toast('Profile setup complete! \u{1F389}', 'success');
+      EC.app.buildShell();
+      EC.studentProfile.render(document.getElementById('page-content-area'));
+    } catch (error) {
+      EC.toast(error.message || 'Could not save your profile', 'danger');
+    }
   },
 
   editModal(me) {
@@ -143,9 +162,10 @@ EC.studentProfile = {
             <button class="modal-close" onclick="document.getElementById('profile-edit-modal').classList.remove('open')">&times;</button>
           </div>
           <div class="modal-body">
-            <div class="form-group"><label class="form-label">Year</label><select class="form-select" id="edit-year"><option>I</option><option ${me.year === 'II' ? 'selected' : ''}>II</option><option ${me.year === 'III' ? 'selected' : ''}>III</option><option>IV</option></select></div>
+            <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="edit-name" value="${me.name || ''}"></div>
+            <div class="form-group"><label class="form-label">Year</label><select class="form-select" id="edit-year"><option ${me.year === 'I' ? 'selected' : ''}>I</option><option ${me.year === 'II' ? 'selected' : ''}>II</option><option ${me.year === 'III' ? 'selected' : ''}>III</option><option ${me.year === 'IV' ? 'selected' : ''}>IV</option></select></div>
             <div class="form-group"><label class="form-label">Department</label><select class="form-select" id="edit-dept"><option ${me.dept === 'AI & DS' ? 'selected' : ''}>AI &amp; DS</option><option>AI &amp; ML</option><option>CSE</option><option>ECE</option><option>CIVIL</option><option>MECH</option><option>CSBS</option></select></div>
-            <div class="form-group"><label class="form-label">Section</label><select class="form-select" id="edit-section"><option ${me.section === 'A' ? 'selected' : ''}>A</option><option>B</option><option>C</option><option>D</option></select></div>
+            <div class="form-group"><label class="form-label">Section</label><select class="form-select" id="edit-section"><option ${me.section === 'A' ? 'selected' : ''}>A</option><option ${me.section === 'B' ? 'selected' : ''}>B</option><option ${me.section === 'C' ? 'selected' : ''}>C</option><option ${me.section === 'D' ? 'selected' : ''}>D</option></select></div>
             <div class="form-group"><label class="form-label">Register Number</label><input class="form-input" id="edit-regno" value="${me.regNo || ''}"></div>
             <div class="form-group"><label class="form-label">Profile Picture</label><input class="form-input" id="edit-profile-image" type="file" accept="image/*"></div>
           </div>
@@ -163,28 +183,33 @@ EC.studentProfile = {
   },
 
   async saveEdit() {
-    const me = EC.getStudent(EC.state.myId || 1);
+    const me = EC.studentProfile.getCurrentStudent();
     if (me) {
+      me.name = document.getElementById('edit-name')?.value?.trim();
       me.year = document.getElementById('edit-year')?.value;
       me.dept = document.getElementById('edit-dept')?.value;
       me.section = document.getElementById('edit-section')?.value;
       me.regNo = document.getElementById('edit-regno')?.value?.trim();
+      if (!me.name || !me.year || !me.dept || !me.section || !me.regNo) {
+        EC.toast('Please fill in all fields', 'danger');
+        return;
+      }
       try {
+        const file = document.getElementById('edit-profile-image')?.files?.[0];
+        let profileImageUrl = me.profileImageUrl || '';
+        if (file) {
+          const uploaded = await EC.api.uploadProfileImage(me.id, file);
+          profileImageUrl = uploaded?.profileImageUrl || uploaded?.data?.profileImageUrl || profileImageUrl;
+        }
         const updated = await EC.api.updateProfile(me.id, {
+          name: me.name,
           year: me.year,
           dept: me.dept,
           section: me.section,
           regNo: me.regNo,
-          motivationQuote: me.motivationQuote || ''
+          profileImageUrl
         });
-        Object.assign(me, updated);
-        EC.state.currentUser = { ...EC.state.currentUser, ...updated };
-        const file = document.getElementById('edit-profile-image')?.files?.[0];
-        if (file) {
-          const withImage = await EC.api.uploadProfileImage(me.id, file);
-          Object.assign(me, withImage);
-          EC.state.currentUser = { ...EC.state.currentUser, ...withImage };
-        }
+        EC.studentProfile.syncStudent(updated);
       } catch (err) {
         EC.toast(err.message || 'Could not update profile', 'danger');
         return;
@@ -197,20 +222,94 @@ EC.studentProfile = {
   },
 
   renderXpLog() {
+    const me = EC.studentProfile.getCurrentStudent();
+    const recentXp = Array.isArray(me?.xpLog) ? me.xpLog.slice().reverse() : [];
     return `
-      <div style="padding:20px;color:var(--text-muted);font-size:13px">
-        Your XP activity log will appear here once live grading and reward events are recorded.
+      <div class="scroll-panel" style="padding:8px 20px 20px">
+        ${recentXp.length
+          ? recentXp.map(entry => `
+              <div style="display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-soft)">
+                <div>
+                  <div style="font-weight:600">${entry.reason || 'XP update'}</div>
+                  <div style="font-size:12px;color:var(--text-muted)">${entry.date ? formatDateTime(entry.date) : 'Just now'}</div>
+                </div>
+                <div style="font-weight:700;color:${Number(entry.amount || 0) >= 0 ? 'var(--success)' : 'var(--danger)'}">${Number(entry.amount || 0) > 0 ? '+' : ''}${Number(entry.amount || 0)}</div>
+              </div>
+            `).join('')
+          : `<div style="padding-top:12px;color:var(--text-muted);font-size:13px">Your XP activity will appear here once grading and rewards are recorded.</div>`
+        }
       </div>
     `;
   },
 
-  getMotivationQuote(me) {
-    if (me.rank === 1) return "You're at the top! Don't let anyone catch you \u{1F451}";
-    if (me.rank <= 3) return "So close to the top! Just a few more XP and the crown is yours \u{1F3C6}";
-    if (me.rank <= 10) return "You're in the top 10 - push harder and break into the top 3 \u{1F4AA}";
-    if (me.rank <= 20) return "The leaderboard is watching. Make your move \u{1F4C8}";
-    if (me.streak >= 7) return "ON FIRE! Keep this streak alive - you're unstoppable \u{1F525}\u{1F525}";
-    if (me.streak === 0) return "Streak lost, but the game isn't over. Come back stronger today \u{1F4AB}";
-    return 'Every legend started from the bottom. Your time is coming \u26A1';
+  fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Could not read the selected image.'));
+      reader.readAsDataURL(file);
+    });
+  },
+
+  getCurrentStudent() {
+    const myId = EC.state.myId || EC.state.currentUser?.id;
+    return EC.getStudent(myId) || (EC.state.currentUser ? EC.studentProfile.ensureStudentState(EC.state.currentUser) : null);
+  },
+
+  ensureStudentState(user) {
+    const userId = user?.id || user?._id;
+    if (!userId) return null;
+    const normalized = {
+      id: userId,
+      name: user.name || 'Student',
+      email: user.email || '',
+      initials: user.initials || (user.name || 'Student').split(' ').filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase(),
+      level: user.level || EC.levelFromXp(Number(user.xp || 0)),
+      xp: Number(user.xp || 0),
+      rank: Number(user.rank || 0),
+      streak: Number(user.streak || 0),
+      tasks: Number(user.tasksCompleted || user.tasks || 0),
+      color: user.color || '#1a3a8f',
+      heroRole: user.heroRole || 'mage',
+      regNo: user.regNo || '',
+      year: user.year || '',
+      dept: user.dept || '',
+      section: user.section || '',
+      motivationQuote: user.motivationQuote || '',
+      profileImageUrl: user.profileImageUrl || '',
+      xpLog: Array.isArray(user.xpLog) ? user.xpLog : [],
+      badgeShowcase: Array.isArray(user.badgeShowcase) ? user.badgeShowcase : [],
+      unlockedBadges: Array.isArray(user.unlockedBadges) ? user.unlockedBadges : []
+    };
+    const existingIndex = EC.state.students.findIndex(student => String(student.id) === String(normalized.id));
+    if (existingIndex >= 0) {
+      EC.state.students[existingIndex] = { ...EC.state.students[existingIndex], ...normalized };
+      return EC.state.students[existingIndex];
+    }
+    EC.state.students.push(normalized);
+    return normalized;
+  },
+
+  syncStudent(updated) {
+    const student = EC.studentProfile.ensureStudentState(updated);
+    if (student) {
+      EC.state.currentUser = { ...EC.state.currentUser, ...student };
+      EC.state.myId = student.id;
+      EC.state.myXp = student.xp;
+      EC.state.myLevel = student.level;
+      EC.state.myRank = student.rank;
+      EC.state.myStreak = student.streak;
+      const saved = sessionStorage.getItem('ec_user');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          parsed.user = { ...parsed.user, ...student };
+          sessionStorage.setItem('ec_user', JSON.stringify(parsed));
+        } catch (error) {
+          // Ignore malformed session data.
+        }
+      }
+    }
+    return student;
   }
 };

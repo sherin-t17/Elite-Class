@@ -10,7 +10,7 @@ const ChatMessageSchema = new mongoose.Schema(
       text: String,
       from: String
     },
-    reactions: { type: Map, of: Number, default: {} }
+    reactions: { type: Map, of: [String], default: {} }
   },
   { timestamps: true }
 );

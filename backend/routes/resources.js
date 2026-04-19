@@ -4,16 +4,37 @@ const path = require('path');
 const Resource = require('../models/Resource');
 const { verifyToken } = require('../middleware/auth');
 const { teacherOnly } = require('../middleware/roleCheck');
-const { formatSize, uploadBuffer } = require('../utils/fileStorage');
+const os = require('os');
+const { formatSize, uploadBuffer, uploadFile } = require('../utils/fileStorage');
 const router = express.Router();
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, os.tmpdir());
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
 
 // Get all resources
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const resources = await Resource.find().populate('uploadedBy').sort({ createdAt: -1 });
-    res.json({ success: true, data: resources });
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const [resources, total] = await Promise.all([
+      Resource.find().populate('uploadedBy').sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Resource.countDocuments()
+    ]);
+
+    res.json({
+      success: true,
+      data: resources,
+      pagination: { page, limit, total }
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -73,7 +94,7 @@ router.post('/', verifyToken, teacherOnly, upload.single('file'), async (req, re
     let size = null;
 
     if (req.file) {
-      const result = await uploadBuffer(req, req.file, 'resources');
+      const result = await uploadFile(req, req.file, 'resources');
       fileUrl = result.secure_url;
       size = formatSize(req.file.size);
     }

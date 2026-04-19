@@ -1,5 +1,5 @@
 /* ============================================================
-   ELITE CLASS - SEASONS & DAILY MISSIONS
+   ELITE CLASS - SEASONS
    ============================================================ */
 
 window.EC = window.EC || {};
@@ -25,10 +25,10 @@ EC.seasons = {
 
     el.innerHTML = `
       <div class="battle-pass-track animate-in">
-        ${s.endsIn <= 3 ? `<div class="season-end-banner">⚡ Season ends in ${s.endsIn} days! Claim your rewards before they expire!</div>` : ''}
+        ${s.endsIn <= 3 ? `<div class="season-end-banner">âš¡ Season ends in ${s.endsIn} days! Claim your rewards before they expire!</div>` : ''}
         <div class="bp-header">
           <div>
-            <div class="bp-title">🏆 ${s.name}</div>
+            <div class="bp-title">ðŸ† ${s.name}</div>
             <div class="bp-season">Ends in ${s.endsIn} days</div>
           </div>
           <button class="btn btn-sm" style="background:rgba(255,255,255,0.18);color:#fff;border:1.5px solid rgba(255,255,255,0.35);font-weight:600" onclick="EC.seasons.showSeasonInfo()">Season Info</button>
@@ -52,8 +52,8 @@ EC.seasons = {
           }).join('')}
         </div>
         <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">
-          <div style="font-size:12px;color:rgba(255,255,255,0.5)">Milestone ${s.currentMilestone}/10 • Complete tasks to advance</div>
-          <div style="font-size:12px;color:var(--accent);font-weight:600">🏆 Final Reward: Exclusive Profile Frame</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.5)">Milestone ${s.currentMilestone}/10 â€¢ Complete tasks to advance</div>
+          <div style="font-size:12px;color:var(--accent);font-weight:600">ðŸ† Final Reward: Exclusive Profile Frame</div>
         </div>
       </div>
     `;
@@ -71,64 +71,5 @@ EC.seasons = {
 
   showSeasonInfo() {
     EC.toast(`Season ends in ${EC.state.season.endsIn} days. Top 3 students get exclusive rewards!`, 'default', 4000);
-  }
-};
-
-EC.dailyMissions = {
-  render(el) {
-    if (!el) return;
-    const missions = EC.state.dailyMissions;
-
-    if (!missions.length) {
-      el.innerHTML = `
-        <div class="card animate-in">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Daily Missions</div>
-              <div class="card-subtitle">No live mission data available</div>
-            </div>
-          </div>
-        </div>
-      `;
-      return;
-    }
-
-    const done = missions.filter(m => m.completed).length;
-    el.innerHTML = `
-      <div class="card animate-in">
-        <div class="card-header">
-          <div>
-            <div class="card-title">⚡ Daily Missions</div>
-            <div class="card-subtitle">${done}/${missions.length} completed today</div>
-          </div>
-          <div class="tag ${done === missions.length ? 'status-done' : 'status-pending'}">${done === missions.length ? 'All done!' : 'In progress'}</div>
-        </div>
-        <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
-          ${missions.map((m, i) => `
-            <div class="mission-item ${m.completed ? 'completed' : ''}" style="opacity:${m.completed ? 0.7 : 1}">
-              <div class="mission-icon">${m.icon}</div>
-              <div class="mission-info">
-                <div class="mission-name" style="${m.completed ? 'text-decoration:line-through;color:var(--text-muted)' : ''}">${m.name}</div>
-                <div class="mission-desc">${m.desc}</div>
-              </div>
-              <div class="mission-xp">+${m.xp} XP</div>
-              <div class="mission-check" onclick="EC.dailyMissions.complete(${i})" style="cursor:pointer;font-size:22px" title="${m.completed ? 'Completed' : 'Click to complete'}">
-                ${m.completed ? '✅' : '⭕'}
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-  },
-
-  complete(idx) {
-    const mission = EC.state.dailyMissions[idx];
-    if (!mission || mission.completed) return;
-    mission.completed = true;
-    EC.showXp(`+${mission.xp} XP`);
-    EC.toast(`Mission complete: ${mission.name}!`, 'success');
-    const el = document.getElementById('daily-missions-container');
-    if (el) EC.dailyMissions.render(el);
   }
 };

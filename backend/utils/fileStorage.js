@@ -60,23 +60,61 @@ async function uploadBuffer(req, file, folder = 'elite-class') {
   if (!file) return null;
 
   if (hasCloudinaryConfig()) {
-    return await new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        { resource_type: 'auto', folder },
-        (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
-        }
-      );
-      uploadStream.end(file.buffer);
-    });
+    try {
+      return await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { resource_type: 'auto', folder },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        );
+        uploadStream.end(file.buffer);
+      });
+    } catch (error) {
+      console.warn(`[FileStorage] Cloudinary upload failed for "${folder}", falling back to local storage: ${error.message}`);
+    }
   }
 
   return await saveFileLocally(req, file, folder);
 }
 
+async function uploadFile(req, file, folder = 'elite-class') {
+  if (!file || !file.path) return null;
+
+  if (hasCloudinaryConfig()) {
+    try {
+      const result = await cloudinary.uploader.upload(file.path, {
+        resource_type: 'auto',
+        folder
+      });
+      // Cleanup temp file
+      await fs.unlink(file.path).catch(() => {});
+      return result;
+    } catch (error) {
+      console.warn(`[FileStorage] Cloudinary upload failed for "${folder}", falling back to local storage: ${error.message}`);
+    }
+  }
+
+  // Fallback to local uploads directory
+  const safeFolder = String(folder || 'general').replace(/[^a-z0-9-_]/gi, '-').toLowerCase();
+  const uploadDir = path.join(__dirname, '..', 'uploads', safeFolder);
+  await fs.mkdir(uploadDir, { recursive: true });
+
+  const fileName = `${Date.now()}-${crypto.randomUUID()}-${sanitizeFileName(file.originalname)}`;
+  const fullPath = path.join(uploadDir, fileName);
+  
+  await fs.rename(file.path, fullPath);
+
+  return {
+    secure_url: `${req.protocol}://${req.get('host')}/uploads/${safeFolder}/${fileName}`,
+    bytes: file.size
+  };
+}
+
 module.exports = {
   formatSize,
   hasCloudinaryConfig,
-  uploadBuffer
+  uploadBuffer,
+  uploadFile
 };

@@ -8,7 +8,6 @@ EC.studentLeaderboard = {
       <div class="tabs">
         <button class="tab-btn active" onclick="EC.studentLeaderboard.tab(this,'alltime')">&#x1F3C6; All-Time</button>
         <button class="tab-btn" onclick="EC.studentLeaderboard.tab(this,'weekly')">&#x1F4C5; This Week</button>
-        <button class="tab-btn" onclick="EC.studentLeaderboard.tab(this,'squads')">&#x1F465; Squads</button>
       </div>
       <div id="lb-view" class="animate-in"></div>
     `;
@@ -73,7 +72,7 @@ EC.studentLeaderboard = {
             ${weekly.map((student, index) => `
               <div class="lb-row ${student.id === myId ? 'me' : ''}">
                 <div class="lb-rank ${index < 3 ? 'top' + (index + 1) : ''}">${index === 0 ? '&#x1F947;' : index === 1 ? '&#x1F948;' : index === 2 ? '&#x1F949;' : '#' + (index + 1)}</div>
-                <div class="avatar avatar-sm" style="background:${student.color}">${student.initials}</div>
+                <div class="avatar avatar-sm" style="background:${student.color};background-image:url('${EC.getProfileImageUrl(student)}');background-size:cover;background-position:center;color:transparent;">${student.initials}</div>
                 <div class="lb-info"><div class="lb-name">${student.name}</div><div class="lb-sub">&#x1F525; ${student.streak}-day streak</div></div>
                 <div class="lb-xp">${student.streak * 40} XP this week</div>
               </div>
@@ -82,9 +81,5 @@ EC.studentLeaderboard = {
         </div>`;
     }
 
-    if (type === 'squads') {
-      el.innerHTML = `<div class="card animate-in"><div class="card-header"><div class="card-title">&#x1F465; Squad Leaderboard</div></div><div class="card-body" id="squad-lb"></div></div>`;
-      EC.gamification.renderSquads(document.getElementById('squad-lb'));
-    }
   }
 };

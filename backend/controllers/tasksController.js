@@ -12,13 +12,13 @@ cloudinary.config({
 
 exports.getAll = async (req, res) => {
   try {
-    const tasks = await Task.find().populate('createdBy');
+    const tasks = await Task.find().populate('createdBy').lean();
 
     if (req.user.role === 'student') {
-      const submissions = await Submission.find({ student: req.user.id });
+      const submissions = await Submission.find({ student: req.user.id }).lean();
       const tasksWithStatus = tasks.map(task => ({
-        ...task.toObject(),
-        submission: submissions.find(s => s.task.toString() === task._id.toString())
+        ...task,
+        submission: submissions.find(s => s.task.toString() === (task._id || task.id).toString())
       }));
       return res.json({ success: true, data: tasksWithStatus });
     }

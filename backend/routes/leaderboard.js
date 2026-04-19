@@ -1,6 +1,5 @@
 const express = require('express');
 const User = require('../models/User');
-const Squad = require('../models/Squad');
 const { verifyToken } = require('../middleware/auth');
 const router = express.Router();
 
@@ -20,11 +19,11 @@ router.get('/', verifyToken, async (req, res) => {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      const students = await User.find({ role: 'student' }).populate('xpLog');
+      const students = await User.find({ role: 'student' }).lean();
       const weekly = students
         .map(s => ({
-          ...s.toObject(),
-          weeklyXp: s.xpLog
+          ...s,
+          weeklyXp: (s.xpLog || [])
             .filter(log => new Date(log.date) > sevenDaysAgo)
             .reduce((sum, log) => sum + log.amount, 0)
         }))
@@ -38,13 +37,6 @@ router.get('/', verifyToken, async (req, res) => {
         .sort({ level: -1, xp: -1 })
         .limit(50);
       return res.json({ success: true, data: students });
-    }
-
-    if (type === 'squads') {
-      const squads = await Squad.find()
-        .populate('members')
-        .sort({ rank: 1 });
-      return res.json({ success: true, data: squads });
     }
 
     res.json({ success: true, data: [] });

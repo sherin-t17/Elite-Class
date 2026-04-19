@@ -28,7 +28,7 @@ EC.studentTasks = {
   renderCard(task) {
     const isOpenable = ['pending', 'redo', 'submitted', 'completed'].includes(task.status);
     return `
-      <div class="task-item priority-${task.priority ? 'high' : 'low'} ${task.status === 'completed' ? 'completed' : ''}" onclick="EC.studentTasks.open('${String(task.id)}')">
+      <div class="task-item priority-${task.priority ? 'high' : 'low'} ${task.status === 'completed' ? 'completed' : ''}" id="task-card-${task.id}" onclick="EC.studentTasks.open('${String(task.id)}')">
         <div class="task-left">
           <div class="task-title-row">
             <span class="task-name">${task.title}</span>
@@ -51,6 +51,18 @@ EC.studentTasks = {
         </div>
       </div>
     `;
+  },
+
+  updateTaskCard(taskId) {
+    const task = EC.state.tasks.find(t => String(t.id) === String(taskId));
+    if (!task) return;
+    const card = document.getElementById(`task-card-${taskId}`);
+    if (card) {
+      const parent = card.parentElement;
+      const temp = document.createElement('div');
+      temp.innerHTML = this.renderCard(task);
+      parent.replaceChild(temp.firstElementChild, card);
+    }
   },
 
   detailModal() {
@@ -211,10 +223,11 @@ EC.studentTasks = {
       const submission = await EC.api.submitTask(taskId, payload);
       task.submission = submission;
       task.status = 'submitted';
+      task.completions = (task.completions || 0) + 1;
       delete this.selectedFiles[taskId];
       EC.toast(task.answerMode === 'done' ? 'Task marked as done and sent for review.' : 'Task submitted successfully.', 'success');
       this.open(taskId);
-      this.render(document.getElementById('page-content-area'));
+      this.updateTaskCard(taskId);
     } catch (err) {
       EC.toast(err.message || 'Could not submit task', 'danger');
     }
@@ -286,6 +299,7 @@ EC.studentTasks = {
       Object.assign(task, updated);
       EC.toast('Choice claimed successfully.', 'success');
       this.open(taskId);
+      this.updateTaskCard(taskId);
     } catch (err) {
       EC.toast(err.message || 'Could not claim choice', 'danger');
     }

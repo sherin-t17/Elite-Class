@@ -20,7 +20,7 @@ EC.studentDashboard = {
         <div class="card">
           <div class="card-body">
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-              <div class="avatar avatar-lg" style="background:${me.color}">${me.initials}</div>
+              <div class="avatar avatar-lg" style="background:${me.color};background-image:url('${EC.getProfileImageUrl(me)}');background-size:cover;background-position:center;color:transparent;">${me.initials}</div>
               <div style="flex:1">
                 <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700">${me.name}</div>
                 <div style="font-size:13px;color:var(--text-muted)">${me.level} &bull; Rank #${me.rank}</div>
@@ -50,8 +50,7 @@ EC.studentDashboard = {
 
       <div class="two-col-wide animate-in animate-in-delay-3">
         <div>
-          <div id="daily-missions-container"></div>
-          <div class="card mt-20">
+          <div class="card">
             <div class="card-header"><div class="card-title">&#x1F4CB; Upcoming Tasks</div><button class="btn btn-outline btn-sm" onclick="EC.navigate('tasks')">View All</button></div>
             <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
               ${s.tasks.filter(task => task.status === 'pending').slice(0, 3).map(task => `
@@ -90,7 +89,6 @@ EC.studentDashboard = {
       </div>
     `;
 
-    EC.dailyMissions.render(document.getElementById('daily-missions-container'));
     EC.gamification.renderXpBar(document.getElementById('xp-bar-profile'), me.xp);
   }
 };

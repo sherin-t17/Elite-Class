@@ -37,7 +37,7 @@ EC.teacherLeave = {
     return `
       <div class="card mb-16 animate-in">
         <div style="display:flex;align-items:flex-start;gap:14px;padding:20px">
-          <div class="avatar avatar-sm" style="background:${student?.color || '#1a3a8f'};flex-shrink:0">${student?.initials || '?'}</div>
+          <div class="avatar avatar-sm" style="background:${student?.color || '#1a3a8f'};flex-shrink:0;background-image:url('${EC.getProfileImageUrl(student || { name: request.studentName, profileImageUrl: '' })}');background-size:cover;background-position:center;color:transparent;">${student?.initials || '?'}</div>
           <div style="flex:1">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
               <div style="font-weight:700;font-size:15px">${request.studentName}</div>
@@ -100,11 +100,8 @@ EC.teacherLeave = {
       const updated = await EC.api.approveLeave(id);
       const index = EC.state.leaveRequests.findIndex(request => String(request.id) === String(updated.id));
       if (index >= 0) EC.state.leaveRequests[index] = updated;
-      if (updated.type === 'od' || updated.type === 'leave') {
-        EC.teacherAttendance.markStudentOD(updated.studentId, updated.date);
-      }
       EC.app.updateNavBadges();
-      EC.toast(updated.type === 'od' ? 'OD approved and synced to attendance.' : 'Leave approved.', 'success');
+      EC.toast(updated.type === 'od' ? 'OD approved.' : 'Leave approved.', 'success');
       EC.teacherLeave.render(document.getElementById('page-content-area'));
     } catch (err) {
       EC.toast(err.message || 'Could not approve request', 'danger');

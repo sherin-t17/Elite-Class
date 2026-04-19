@@ -1,5 +1,5 @@
 /* ============================================================
-   ELITE CLASS — APP ROUTER & SHELL v3
+   ELITE CLASS - APP ROUTER & SHELL v3
    ============================================================ */
 window.EC = window.EC || {};
 
@@ -53,44 +53,296 @@ EC.triggerEnterAction = function(target) {
   return false;
 };
 
+EC.notifications = {
+  pollTimer: null,
+  initialized: false,
+
+  storageKey() {
+    return `ec_notifications_${EC.state.currentRole || 'guest'}_${EC.state.myId || 'anon'}`;
+  },
+
+  loadSeen() {
+    if (this.initialized) return EC.state.notifications.seen || {};
+    try {
+      const raw = localStorage.getItem(this.storageKey());
+      EC.state.notifications.seen = raw ? JSON.parse(raw) : {};
+    } catch (error) {
+      EC.state.notifications.seen = {};
+    }
+    this.initialized = true;
+    return EC.state.notifications.seen;
+  },
+
+  persistSeen() {
+    localStorage.setItem(this.storageKey(), JSON.stringify(EC.state.notifications.seen || {}));
+  },
+
+  trackedPages() {
+    const nav = EC.state.currentRole === 'teacher' ? EC.app.teacherNav : EC.app.studentNav;
+    return nav.filter(item => item && item.id).map(item => item.id);
+  },
+
+  entryCopies(count, buildKey) {
+    return Array.from({ length: Math.max(0, Number(count || 0)) }, (_, index) => buildKey(index));
+  },
+
+  sectionEntries(sectionId) {
+    const myId = String(EC.state.currentUser?.id || '');
+    const role = EC.state.currentRole;
+
+    switch (sectionId) {
+      case 'tasks':
+        if (role === 'teacher') {
+          return (EC.state.tasks || []).flatMap(task =>
+            this.entryCopies(task.pendingGradingCount, index => `task:${task.id}:pending:${task.updatedAt || ''}:${index}`)
+          );
+        }
+        return (EC.state.tasks || []).map(task => `task:${task.id}:${task.status}:${task.updatedAt || task.dueRaw || ''}`);
+      case 'month-tasks':
+        return [
+          ...(EC.state.monthTaskBatches || []).map(batch => `batch:${batch.id}:${batch.updatedAt || ''}`),
+          ...(EC.state.monthTaskWarnings || []).map(warning => `warning:${warning.id}:${warning.teacherAction}:${warning.actionedAt || warning.submittedAt || warning.triggeredAt || ''}`)
+        ];
+      case 'gradebook':
+        return (EC.state.tasks || []).flatMap(task =>
+          this.entryCopies(task.pendingGradingCount, index => `gradebook:${task.id}:${task.updatedAt || ''}:${index}`)
+        );
+      case 'review':
+        return (EC.state.tasks || []).flatMap(task =>
+          this.entryCopies(task.pendingGradingCount, index => `review:${task.id}:${task.updatedAt || ''}:${index}`)
+        );
+      case 'students':
+        return (EC.state.students || []).map(student => [
+          'student',
+          student.id,
+          student.updatedAt || '',
+          student.xp,
+          student.tasks,
+          student.regNo,
+          student.section
+        ].join(':'));
+      case 'leaderboard':
+        return (EC.state.students || []).map(student => `leaderboard:${student.id}:${student.rank}:${student.xp}:${student.streak}`);
+      case 'profile':
+        return EC.state.currentUser ? [[
+          'profile',
+          EC.state.currentUser.id,
+          EC.state.currentUser.updatedAt || '',
+          EC.state.currentUser.name || '',
+          EC.state.currentUser.regNo || '',
+          EC.state.currentUser.section || ''
+        ].join(':')] : [];
+      case 'poll':
+        return (EC.state.polls || []).flatMap(poll => {
+          if (role === 'teacher' && String(poll.createdById || '') === myId) {
+            return (poll.options || []).flatMap((option, optionIndex) =>
+              (option.votes || [])
+                .filter(voterId => String(voterId) !== myId)
+                .map(voterId => `poll-vote:${poll.id}:${optionIndex}:${voterId}`)
+            );
+          }
+          return String(poll.createdById || '') === myId
+            ? []
+            : [`poll:${poll.id}:${poll.active}:${poll.closedAt || ''}:${poll.updatedAt || poll.createdAtRaw || ''}`];
+        });
+      case 'announcements':
+        return (EC.state.announcements || []).flatMap(announcement => {
+          const entries = [];
+          if (String(announcement.postedById || '') !== myId) {
+            entries.push(`announcement:${announcement.id}:${announcement.updatedAt || announcement.createdAt || ''}`);
+          }
+          (announcement.comments || []).forEach(comment => {
+            if (String(comment.authorId || '') !== myId) {
+              entries.push(`announcement-comment:${announcement.id}:${comment.id}:${comment.rawCreatedAt || ''}`);
+            }
+          });
+          return entries;
+        });
+      case 'leave-od':
+        if (role === 'teacher') {
+          return (EC.state.leaveRequests || [])
+            .filter(request => request.status === 'pending')
+            .map(request => `leave:${request.id}:pending:${request.createdAt || ''}`);
+        }
+        return (EC.state.leaveRequests || [])
+          .filter(request => request.status !== 'pending')
+          .map(request => `leave:${request.id}:${request.status}:${request.reviewedAt || request.createdAt || ''}`);
+      case 'explanations':
+        return (EC.state.monthTaskWarnings || [])
+          .filter(warning => warning.teacherAction === 'pending' && warning.explanationText)
+          .map(warning => `explanation:${warning.id}:${warning.submittedAt || warning.triggeredAt || warning.createdAt || ''}`);
+      case 'review':
+        return (EC.state.tasks || []).flatMap(task =>
+          this.entryCopies(task.pendingGradingCount, index => `review:${task.id}:${task.updatedAt || ''}:${index}`)
+        );
+      case 'chat':
+        return (EC.state.chatMessagesByContext?.class || [])
+          .filter(message => String(message.fromId || '') !== myId)
+          .map(message => `chat:${message.id}:${message.createdAt || ''}`);
+      case 'schedule':
+        return (EC.state.schedules || []).map(entry => `schedule:${entry.id}:${entry.day}:${entry.time}:${entry.subject}:${entry.room}:${entry.type}`);
+      case 'resources':
+        return (EC.state.resources || [])
+          .filter(resource => String(resource.uploadedById || '') !== myId)
+          .map(resource => `resource:${resource.id}:${resource.updatedAt || resource.createdAt || ''}`);
+      case 'bookmarks':
+        return (EC.state.bookmarks || []).map(bookmark => `bookmark:${bookmark.type}:${bookmark.id}`);
+      case 'dashboard':
+      case 'export':
+      default:
+        return [];
+    }
+  },
+
+  ensureBaseline() {
+    const seen = this.loadSeen();
+    const tracked = this.trackedPages();
+    if (Object.keys(seen).length) return;
+    tracked.forEach(sectionId => {
+      if (sectionId === 'dashboard') return;
+      seen[sectionId] = this.sectionEntries(sectionId);
+    });
+    EC.state.notifications.seen = seen;
+    this.persistSeen();
+  },
+
+  countFor(sectionId) {
+    const seen = this.loadSeen();
+    const currentEntries = this.sectionEntries(sectionId);
+    const seenEntries = new Set(Array.isArray(seen[sectionId]) ? seen[sectionId] : []);
+    return currentEntries.filter(entry => !seenEntries.has(entry)).length;
+  },
+
+  markSeen(sectionId) {
+    if (!sectionId || sectionId === 'dashboard') return;
+    this.loadSeen();
+    EC.state.notifications.seen[sectionId] = this.sectionEntries(sectionId);
+    this.persistSeen();
+  },
+
+  refreshCounts() {
+    this.ensureBaseline();
+    const tracked = this.trackedPages();
+    const counts = {};
+    let persistNeeded = false;
+
+    tracked.forEach(sectionId => {
+      if (sectionId === 'dashboard') return;
+      if (EC.state.currentPage === sectionId) {
+        const nextEntries = this.sectionEntries(sectionId);
+        const currentSeen = EC.state.notifications.seen?.[sectionId] || [];
+        if (JSON.stringify(currentSeen) !== JSON.stringify(nextEntries)) {
+          EC.state.notifications.seen[sectionId] = nextEntries;
+          persistNeeded = true;
+        }
+        counts[sectionId] = 0;
+        return;
+      }
+      counts[sectionId] = this.countFor(sectionId);
+    });
+
+    counts.dashboard = tracked
+      .filter(sectionId => sectionId !== 'dashboard')
+      .reduce((sum, sectionId) => sum + Number(counts[sectionId] || 0), 0);
+
+    EC.state.notifications.counts = counts;
+    if (persistNeeded) this.persistSeen();
+    EC.app?.renderNavBadges?.();
+  },
+
+  async refreshRemoteData() {
+    if (!EC.state.authToken) return;
+    try {
+      // Smart polling: only full bootstrap if data is stale (5 mins)
+      const now = Date.now();
+      if (!EC.state._lastFullBootstrap || (now - EC.state._lastFullBootstrap > 300000)) {
+        await EC.api.bootstrap();
+        EC.state._lastFullBootstrap = now;
+      }
+
+      const extraRequests = [
+        EC.api.getChatMessages('class').then(messages => {
+          if (!EC.state.chatMessagesByContext) EC.state.chatMessagesByContext = {};
+          EC.state.chatMessagesByContext.class = messages;
+        }),
+        EC.api.listMonthTaskBatches()
+          .then(result => {
+            EC.state.monthTaskBatches = result?.batches || [];
+          })
+          .catch(() => {}),
+        (EC.state.currentRole === 'teacher'
+          ? EC.api.getMonthTaskWarnings()
+          : EC.api.getMyMonthTaskWarnings()
+        ).then(warnings => {
+          EC.state.monthTaskWarnings = warnings || [];
+        }).catch(() => {})
+      ];
+      await Promise.allSettled(extraRequests);
+    } finally {
+      this.refreshCounts();
+    }
+  },
+
+  async init() {
+    this.initialized = false;
+    this.loadSeen();
+    EC.loadSchedules();
+    this.refreshCounts();
+    this.startPolling();
+  },
+
+  startPolling() {
+    this.stopPolling();
+    this.pollTimer = window.setInterval(() => {
+      this.refreshRemoteData().catch(() => {});
+    }, 15000);
+  },
+
+  stopPolling() {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+};
+
 EC.app = {
   teacherNav: [
     {section:'Main'},
-    {id:'dashboard',     icon:'📊', label:'Dashboard'},
-    {id:'tasks',         icon:'📋', label:'Task Manager'},
+    {id:'dashboard',     icon:'🏠', label:'Dashboard'},
+    {id:'tasks',         icon:'✅', label:'Task Manager'},
+    {id:'review',        icon:'📝', label:'Review Page'},
     {id:'month-tasks',   icon:'🗓️', label:'Month Tasks'},
-    {id:'gradebook',     icon:'📒', label:'Gradebook'},
-    {id:'students',      icon:'👥', label:'Student Profiles'},
-    {id:'leaderboard',   icon:'🏅', label:'Leaderboard'},
+    {id:'excel-workbook', icon:'📒', label:'Workbook'},
+    {id:'gradebook',     icon:'📘', label:'Gradebook'},
+    {id:'students',      icon:'🎓', label:'Student Profiles'},
+    {id:'leaderboard',   icon:'🏆', label:'Leaderboard'},
     {section:'Engagement'},
     {id:'announcements', icon:'📢', label:'Announcements'},
-    {id:'attendance',    icon:'✅', label:'Attendance'},
-    {id:'leave-od',      icon:'📋', label:'Leave / OD'},
-    {id:'explanations',  icon:'💬', label:'Explanations'},
+    {id:'leave-od',      icon:'📝', label:'Leave / OD'},
+    {id:'explanations',  icon:'📄', label:'Explanations'},
     {id:'poll',          icon:'📊', label:'Polls'},
-    {id:'squads',        icon:'⚔️', label:'Squad Manager'},
     {id:'chat',          icon:'💬', label:'Class Chat'},
     {section:'Manage'},
-    {id:'schedule',      icon:'📅', label:'Schedule Manager'},
-    {id:'resources',     icon:'📚', label:'Resources Manager'},
+    {id:'schedule',      icon:'⏰', label:'Schedule Manager'},
+    {id:'resources',     icon:'📂', label:'Resources Manager'},
     {id:'bookmarks',     icon:'🔖', label:'Saved Items'},
     {id:'export',        icon:'📤', label:'Export Reports'},
   ],
   studentNav: [
     {section:'Main'},
     {id:'dashboard',     icon:'🏠', label:'Dashboard'},
-    {id:'tasks',         icon:'📋', label:'My Tasks'},
+    {id:'tasks',         icon:'✅', label:'My Tasks'},
     {id:'month-tasks',   icon:'🗓️', label:'Month Tasks'},
-    {id:'leaderboard',   icon:'🏅', label:'Leaderboard'},
-    {id:'profile',       icon:'🎯', label:'My Profile'},
+    {id:'leaderboard',   icon:'🏆', label:'Leaderboard'},
+    {id:'profile',       icon:'🙋', label:'My Profile'},
     {id:'poll',          icon:'📊', label:'Polls'},
     {section:'Class'},
     {id:'announcements', icon:'📢', label:'Announcements'},
-    {id:'attendance',    icon:'✅', label:'Attendance'},
-    {id:'leave-od',      icon:'📋', label:'Leave / OD'},
+    {id:'leave-od',      icon:'📝', label:'Leave / OD'},
     {id:'chat',          icon:'💬', label:'Chat'},
-    {id:'schedule',      icon:'📅', label:'Schedule'},
-    {id:'resources',     icon:'📚', label:'Resources'},
+    {id:'schedule',      icon:'⏰', label:'Schedule'},
+    {id:'resources',     icon:'📂', label:'Resources'},
     {id:'bookmarks',     icon:'🔖', label:'Saved Items'},
   ],
 
@@ -131,12 +383,15 @@ EC.app = {
     const auth = document.getElementById('auth-container');
     if (auth) auth.style.display = 'none';
     document.getElementById('app').classList.add('visible');
+    await EC.api.ensureBackendReady();
     await EC.api.bootstrap();
+    await EC.notifications.init();
     EC.app.buildShell();
-    EC.app.navigate('dashboard');
+    const initialPage = new URLSearchParams(window.location.search).get('page') || 'dashboard';
+    EC.app.navigate(initialPage);
     EC.checkDeadlines();
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').then(registration => {
+      navigator.serviceWorker.register('/sw.js').then(registration => {
         registration.update().catch(() => {});
       }).catch(() => {});
     }
@@ -153,17 +408,17 @@ EC.app = {
 
     sidebar.innerHTML = `
       <div class="sidebar-brand">
-        <div class="brand-icon"><img src="assets/logo.svg" alt="Elite Class" onerror="this.parentElement.innerHTML='👑'"></div>
+        <div class="brand-icon"><img src="assets/logo.svg" alt="Elite Class" onerror="this.parentElement.textContent='EC'"></div>
         <div class="brand-text">
           <div class="brand-name">Elite Class</div>
           <div class="brand-role">${role === 'teacher' ? 'Teacher Portal' : 'Student Portal'}</div>
         </div>
       </div>
       <div class="sidebar-user" onclick="EC.navigate(EC.state.currentRole==='teacher'?'students':'profile')">
-        <div class="avatar avatar-sm avatar-ring" style="background:${role === 'teacher' ? '#1a3a8f' : EC.getStudent(EC.state.myId || 1)?.color || '#1a3a8f'};${user?.profileImageUrl ? `background-image:url('${user.profileImageUrl}');background-size:cover;background-position:center;color:transparent;` : ''}">${(user?.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}</div>
+        <div class="avatar avatar-sm avatar-ring" style="background:${role === 'teacher' ? '#1a3a8f' : EC.getStudent(EC.state.myId || 1)?.color || '#1a3a8f'};background-image:url('${EC.getProfileImageUrl(user || {})}');background-size:cover;background-position:center;color:transparent;">${(user?.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}</div>
         <div class="user-info">
           <div class="user-name">${user?.name || 'User'}</div>
-          ${role === 'student' ? `<div class="user-level">⭐ ${EC.state.myLevel || 'Rookie'} • #${EC.state.myRank || '?'}</div>` : `<div class="user-level">👩‍🏫 Teacher</div>`}
+          ${role === 'student' ? `<div class="user-level">Level ${EC.state.myLevel || 'Rookie'} - #${EC.state.myRank || '?'}</div>` : `<div class="user-level">Teacher</div>`}
         </div>
       </div>
       ${role === 'student' ? `<div class="sidebar-xp-mini"><div class="xp-mini-label"><span>XP</span><span>${EC.state.myXp}</span></div><div class="xp-mini-track"><div class="xp-mini-fill" style="width:${xpInfo.pct}%"></div></div></div>` : ''}
@@ -179,7 +434,7 @@ EC.app = {
       </nav>
       <div class="sidebar-footer">
         <div class="sidebar-footer-actions">
-          <button class="sidebar-footer-btn" id="pwa-install-btn" onclick="EC.app.promptInstall()" title="Install App" style="display:none">📲 Install App</button>
+          <button class="sidebar-footer-btn" id="pwa-install-btn" onclick="EC.app.promptInstall()" title="Install App" style="display:none">Install App</button>
           <button class="sidebar-footer-btn" onclick="EC.app.toggleSound()" id="sound-btn">${EC.state.soundEnabled ? '🔊' : '🔇'} Sound</button>
           <button class="sidebar-footer-btn danger" onclick="EC.auth.logout()">🚪 Logout</button>
         </div>
@@ -200,6 +455,33 @@ EC.app = {
       const btn = document.getElementById('pwa-install-btn');
       if (btn) btn.style.display = '';
     });
+
+    EC.app.renderNavBadges();
+  },
+
+  renderNavBadges() {
+    const counts = EC.state.notifications?.counts || {};
+    const navIds = (EC.state.currentRole === 'teacher' ? EC.app.teacherNav : EC.app.studentNav)
+      .filter(item => item && item.id)
+      .map(item => item.id);
+
+    navIds.forEach(id => {
+      const navEl = document.getElementById(`nav-${id}`);
+      if (!navEl) return;
+      let badge = navEl.querySelector('.nav-badge');
+      const count = Number(counts[id] || 0);
+      if (count <= 0) {
+        if (badge) badge.remove();
+        return;
+      }
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'nav-badge red';
+        navEl.appendChild(badge);
+      }
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.style.display = '';
+    });
   },
 
   promptInstall() {
@@ -212,6 +494,7 @@ EC.app = {
   },
 
   navigate(pageId) {
+    if (EC.state.currentPage) EC.notifications?.markSeen?.(EC.state.currentPage);
     if (pageId !== 'chat') EC.chat?.stopPolling?.();
     EC.state.currentPage = pageId;
 
@@ -223,7 +506,10 @@ EC.app = {
     const nav  = role === 'teacher' ? EC.app.teacherNav : EC.app.studentNav;
     const item = nav.find(n => n.id === pageId);
     const titleEl = document.getElementById('topbar-title');
-    if (titleEl && item) titleEl.innerHTML = `${item.icon} <span>${item.label}</span>`;
+    if (titleEl) {
+      if (item) titleEl.innerHTML = `${item.icon} <span>${item.label}</span>`;
+      else if (pageId === 'excel-workbook') titleEl.innerHTML = `📒 <span>Workbook</span>`;
+    }
 
     const content = document.getElementById('page-content-area');
     if (!content) return;
@@ -231,50 +517,54 @@ EC.app = {
     EC.sound?.click?.();
     EC.app.closeSidebar();
 
-    if (role === 'teacher') {
-      switch (pageId) {
-        case 'dashboard':     EC.teacherDashboard.render(content); break;
-        case 'tasks':         EC.teacherTasks.render(content); break;
-        case 'month-tasks':   EC.teacherMonthTasks.render(content); break;
-        case 'gradebook':     EC.teacherGradebook.render(content); break;
-        case 'students':      EC.teacherStudents.render(content); break;
-        case 'leaderboard':   EC.teacherLeaderboard.render(content); break;
-        case 'announcements': EC.teacherAnnouncements.render(content); break;
-        case 'attendance':    EC.teacherAttendance.render(content); break;
-        case 'leave-od':      EC.teacherLeave.render(content); break;
-        case 'explanations':  EC.teacherExplanations.render(content); break;
-        case 'poll':          EC.teacherPoll.render(content); break;
-        case 'squads':        EC.teacherSquad.render(content); break;
-        case 'chat':          EC.app.renderChat(content); break;
-        case 'schedule':      EC.teacherSchedule.render(content); break;
-        case 'resources':     EC.teacherResources.render(content); break;
-        case 'bookmarks':     EC.app.renderBookmarks(content); break;
-        case 'export':        EC.teacherExport.render(content); break;
-        default:              EC.teacherDashboard.render(content);
+    // Lazy load data for the target page
+    EC.api.bootstrap().then(() => {
+      if (role === 'teacher') {
+        switch (pageId) {
+          case 'dashboard':     EC.teacherDashboard.render(content); break;
+          case 'tasks':         EC.teacherTasks.render(content); break;
+          case 'review':        EC.teacherReview.render(content); break;
+          case 'month-tasks':   EC.teacherMonthTasks.render(content); break;
+          case 'gradebook':     EC.teacherGradebook.render(content); break;
+          case 'students':      EC.teacherStudents.render(content); break;
+          case 'leaderboard':   EC.teacherLeaderboard.render(content); break;
+          case 'announcements': EC.teacherAnnouncements.render(content); break;
+          case 'leave-od':      EC.teacherLeave.render(content); break;
+          case 'explanations':  EC.teacherExplanations.render(content); break;
+          case 'poll':          EC.teacherPoll.render(content); break;
+          case 'chat':          EC.app.renderChat(content); break;
+          case 'schedule':      EC.teacherSchedule.render(content); break;
+          case 'resources':     EC.teacherResources.render(content); break;
+          case 'bookmarks':     EC.app.renderBookmarks(content); break;
+          case 'export':        EC.teacherExport.render(content); break;
+          case 'excel-workbook': EC.excelWorkbook.render(content); break;
+          default:              EC.teacherDashboard.render(content);
+        }
+      } else {
+        switch (pageId) {
+          case 'dashboard':     EC.studentDashboard.render(content); break;
+          case 'tasks':         EC.studentTasks.render(content); break;
+          case 'month-tasks':   EC.studentMonthTasks.render(content); break;
+          case 'leaderboard':   EC.studentLeaderboard.render(content); break;
+          case 'profile':       EC.studentProfile.render(content); break;
+          case 'excel-workbook': EC.excelWorkbook.render(content); break;
+          case 'announcements': EC.studentAnnouncements.render(content); break;
+          case 'leave-od':      EC.studentLeave.render(content); break;
+          case 'poll':          EC.studentPoll.render(content); break;
+          case 'chat':          EC.app.renderChat(content); break;
+          case 'schedule':      EC.studentSchedule.render(content); break;
+          case 'resources':     EC.studentResources.render(content); break;
+          case 'bookmarks':     EC.app.renderBookmarks(content); break;
+          default:              EC.studentDashboard.render(content);
+        }
       }
-    } else {
-      switch (pageId) {
-        case 'dashboard':     EC.studentDashboard.render(content); break;
-        case 'tasks':         EC.studentTasks.render(content); break;
-        case 'month-tasks':   EC.studentMonthTasks.render(content); break;
-        case 'leaderboard':   EC.studentLeaderboard.render(content); break;
-        case 'profile':       EC.studentProfile.render(content); break;
-        case 'announcements': EC.studentAnnouncements.render(content); break;
-        case 'attendance':    EC.studentAttendance.render(content); break;
-        case 'leave-od':      EC.studentLeave.render(content); break;
-        case 'poll':          EC.studentPoll.render(content); break;
-        case 'chat':          EC.app.renderChat(content); break;
-        case 'schedule':      EC.studentSchedule.render(content); break;
-        case 'resources':     EC.studentResources.render(content); break;
-        case 'bookmarks':     EC.app.renderBookmarks(content); break;
-        default:              EC.studentDashboard.render(content);
-      }
-    }
+      EC.notifications?.refreshCounts?.();
+    });
   },
 
   renderChat(el) {
     el.innerHTML = `
-      <div class="page-header"><div><h2 class="page-title">💬 Class Chat</h2><p class="page-subtitle">Real-time class discussion</p></div></div>
+      <div class="page-header"><div><h2 class="page-title">Class Chat</h2><p class="page-subtitle">Real-time class discussion</p></div></div>
       <div class="card animate-in" style="height:calc(100vh - 200px);overflow:hidden;display:flex;flex-direction:column">
         <div style="flex:1;overflow:hidden" id="main-chat-area"></div>
       </div>
@@ -297,7 +587,7 @@ EC.app = {
       </div>
       ${EC.state.bookmarks.length === 0
         ? `<div class="card animate-in" style="text-align:center;padding:56px 24px">
-             <div style="font-size:32px;margin-bottom:16px;font-weight:700">🔖</div>
+             <div style="font-size:32px;margin-bottom:16px;font-weight:700">SAVE</div>
              <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;margin-bottom:8px">No bookmarks yet</div>
              <div style="color:var(--text-muted);font-size:14px">Use the bookmark icon on any task, resource, or announcement to keep it here.</div>
            </div>`
@@ -309,7 +599,7 @@ EC.app = {
                   <span style="font-size:14px;font-weight:700;min-width:40px">${b.icon || 'ITEM'}</span>
                   <div style="flex:1;font-weight:500;font-size:14px">${b.title}</div>
                   <button class="btn btn-outline btn-sm" type="button" data-bookmark-action="open" data-bookmark-id="${String(b.id)}" data-bookmark-type="${b.type}" data-bookmark-ref="${b.ref || ''}">Open</button>
-                  <button class="btn btn-ghost btn-sm" type="button" style="color:var(--danger);font-size:16px;padding:4px 8px" title="Remove bookmark" data-bookmark-action="remove" data-bookmark-id="${String(b.id)}" data-bookmark-type="${b.type}">🔖</button>
+                  <button class="btn btn-ghost btn-sm" type="button" style="color:var(--danger);font-size:16px;padding:4px 8px" title="Remove bookmark" data-bookmark-action="remove" data-bookmark-id="${String(b.id)}" data-bookmark-type="${b.type}">Remove</button>
                 </div>
               `).join('')}
             </div>
@@ -349,12 +639,14 @@ EC.app = {
     if (exists) { EC.toast('Already bookmarked', 'default', 1500); return; }
     EC.state.bookmarks.push(normalizedItem);
     EC.app.persistBookmarks();
-    EC.toast('Bookmarked 🔖', 'success', 1800);
+    EC.notifications?.refreshCounts?.();
+    EC.toast('Bookmarked', 'success', 1800);
   },
 
   removeBookmark(id, type) {
     EC.state.bookmarks = EC.state.bookmarks.filter(b => !(String(b.id) === String(id) && b.type === type));
     EC.app.persistBookmarks();
+    EC.notifications?.refreshCounts?.();
     EC.app.renderBookmarks(document.getElementById('page-content-area'));
     EC.toast('Bookmark removed', 'default', 1500);
   },
@@ -399,21 +691,16 @@ EC.app = {
   },
 
   updateNavBadges() {
-    const pending = EC.state.leaveRequests.filter(r => r.status === 'pending').length;
-    const leaveEl = document.getElementById('nav-leave-od');
-    if (leaveEl) {
-      let badge = leaveEl.querySelector('.nav-badge');
-      if (!badge) { badge = document.createElement('span'); badge.className = 'nav-badge red'; leaveEl.appendChild(badge); }
-      badge.textContent = pending;
-      badge.style.display = pending > 0 ? '' : 'none';
-    }
+    EC.app.renderNavBadges();
   },
 
   toggleSound() {
     EC.state.soundEnabled = !EC.state.soundEnabled;
     const btn = document.getElementById('sound-btn');
     if (btn) btn.innerHTML = `${EC.state.soundEnabled ? '🔊' : '🔇'} Sound`;
-    EC.toast(EC.state.soundEnabled ? '🔊 Sound on' : '🔇 Sound off', 'default', 1500);
+    const topbarBtn = document.getElementById('topbar-sound');
+    if (topbarBtn) topbarBtn.innerHTML = EC.state.soundEnabled ? '🔊' : '🔇';
+    EC.toast(EC.state.soundEnabled ? 'Sound on' : 'Sound off', 'default', 1500);
   },
 
   openSidebar() {
@@ -427,59 +714,3 @@ EC.app = {
 };
 
 EC.navigate = page => EC.app.navigate(page);
-
-EC.teacherLeaderboard = {
-  render(el) {
-    const students = EC.state.students;
-    el.innerHTML = `
-      <div class="page-header"><div><h2 class="page-title">🏅 Leaderboard</h2><p class="page-subtitle">Full class rankings and performance</p></div></div>
-      <div class="tabs">
-        <button class="tab-btn active" onclick="EC.teacherLeaderboard.tab(this,'alltime')">🏆 All-Time</button>
-        <button class="tab-btn" onclick="EC.teacherLeaderboard.tab(this,'weekly')">📅 This Week</button>
-        <button class="tab-btn" onclick="EC.teacherLeaderboard.tab(this,'squads')">👥 Squads</button>
-      </div>
-      <div id="tlb-view" class="animate-in"></div>
-    `;
-    EC.teacherLeaderboard.renderAllTime();
-  },
-  renderAllTime() {
-    const students = EC.state.students;
-    const el = document.getElementById('tlb-view');
-    if (!el) return;
-    el.innerHTML = `
-      <div class="two-col-wide">
-        <div class="card">
-          <div class="card-header"><div class="card-title">All-Time Rankings</div></div>
-          <div class="card-body">${students.map(st => EC.gamification.renderLbRow(st, null)).join('')}</div>
-        </div>
-        <div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">Class Summary</div></div>
-            <div class="card-body">
-              ${[['Total XP (class)','XP', students.reduce((a,s)=>a+s.xp,0).toLocaleString()],
-                 ['Avg Attendance','AT', Math.round(students.reduce((a,s)=>a+s.attendance,0)/students.length)+'%'],
-                 ['Top Streak','ST', Math.max(...students.map(s=>s.streak))+' days'],
-                 ['Tasks Submitted','TS', students.reduce((a,s)=>a+s.tasks,0)]
-                ].map(([l,i,v])=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-soft);font-size:14px">${i} ${l}<strong style="color:var(--royal)">${v}</strong></div>`).join('')}
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  },
-  tab(btn, type) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const el = document.getElementById('tlb-view');
-    if (!el) return;
-    if (type === 'alltime') { EC.teacherLeaderboard.renderAllTime(); return; }
-    if (type === 'weekly') {
-      const weekly = [...EC.state.students].sort((a, b) => b.streak - a.streak);
-      el.innerHTML = `<div class="card animate-in"><div class="card-header"><div class="card-title">📅 Weekly Leaderboard</div><span class="tag status-pending">Resets Monday</span></div><div class="card-body">${weekly.map((st,i) => `<div class="lb-row"><div class="lb-rank ${i<3?'top'+(i+1):''}">${i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1)}</div><div class="avatar avatar-sm" style="background:${st.color}">${st.initials}</div><div class="lb-info"><div class="lb-name">${st.name}</div><div class="lb-sub">🔥 ${st.streak}-day streak</div></div><div class="lb-xp">${st.streak*40} XP</div></div>`).join('')}</div></div>`;
-    }
-    if (type === 'squads') {
-      el.innerHTML = `<div class="card animate-in"><div class="card-header"><div class="card-title">👥 Squad Leaderboard</div></div><div class="card-body" id="tlb-squad-lb"></div></div>`;
-      EC.gamification.renderSquads(document.getElementById('tlb-squad-lb'));
-    }
-  }
-};

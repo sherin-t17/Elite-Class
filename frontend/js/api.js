@@ -6,6 +6,27 @@ window.EC = window.EC || {};
 
 const BACKEND_ENABLED = true;
 const API_PORT = '5050';
+const safeGetStorageValue = (key) => {
+  try {
+    return window.localStorage?.getItem(key) || '';
+  } catch (error) {
+    return '';
+  }
+};
+const normalizeApiBase = (value) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  const withProtocol = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `${window.location.protocol === 'file:' ? 'http:' : 'https:'}//${trimmed.replace(/^\/\//, '')}`;
+  return withProtocol.replace(/\/+$/, '').replace(/\/api$/i, '') + '/api';
+};
+const EXPLICIT_API_BASES = [
+  window.ELITE_CLASS_API_URL,
+  window.__ELITE_CLASS_API_URL__,
+  new URLSearchParams(window.location.search).get('api'),
+  safeGetStorageValue('ec_api_base')
+].map(normalizeApiBase).filter(Boolean);
 const API_HOST = window.location.protocol === 'file:'
   ? 'localhost'
   : (window.location.hostname || 'localhost');
@@ -13,6 +34,7 @@ const API_PROTOCOL = window.location.protocol === 'file:'
   ? 'http:'
   : window.location.protocol;
 const API_BASE_CANDIDATES = Array.from(new Set([
+  ...EXPLICIT_API_BASES,
   ...(window.location.protocol === 'file:' ? [] : ['/api']),
   ...(window.location.protocol === 'file:' ? [] : [`${window.location.origin}/api`]),
   `${API_PROTOCOL}//${API_HOST}:${API_PORT}/api`,
@@ -21,6 +43,12 @@ const API_BASE_CANDIDATES = Array.from(new Set([
   `http://localhost:${API_PORT}/api`,
   `http://127.0.0.1:${API_PORT}/api`
 ]));
+
+let resolvedApiBase = '';
+let backendHealthPromise = null;
+
+const withApiPath = (baseUrl, endpoint = '') => `${String(baseUrl || '').replace(/\/+$/, '')}${endpoint}`;
+const withoutApiPath = (baseUrl) => String(baseUrl || '').replace(/\/api\/?$/i, '');
 
 
 const formatShortDate = (value) => {
@@ -67,9 +95,40 @@ const initialsFromName = (name) =>
     .slice(0, 2)
     .toUpperCase();
 
+const buildDefaultProfileImage = (user = {}) => {
+  const name = String(user?.name || 'User');
+  const email = String(user?.email || '').trim().toLowerCase();
+  const initials = initialsFromName(name || email || 'User');
+  const seed = email || name || 'user';
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = ((hash << 5) - hash) + seed.charCodeAt(index);
+    hash |= 0;
+  }
+  const palette = ['#1a3a8f', '#0f766e', '#b45309', '#be123c', '#6d28d9', '#0369a1'];
+  const bg = palette[Math.abs(hash) % palette.length];
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+      <rect width="128" height="128" rx="64" fill="${bg}"/>
+      <text x="64" y="72" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#ffffff">${initials}</text>
+    </svg>
+  `.trim();
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+};
+
+EC.getProfileImageUrl = (user = {}) => {
+  const url = (user?.profileImageUrl && user.profileImageUrl.includes('cloudinary.com'))
+    ? user.profileImageUrl.replace('/upload/', '/upload/c_fill,w_100,h_100,g_face,f_auto,q_auto/')
+    : (user?.profileImageUrl || buildDefaultProfileImage(user));
+
+  if (url.startsWith('data:')) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}t=${Date.now()}`;
+};
+
 const normalizeBadge = (badge) => ({
   id: badge?._id || badge?.id,
-  icon: badge?.icon || '🎖️',
+  icon: badge?.icon || '*',
   name: badge?.name || 'Badge',
   desc: badge?.desc || '',
   rarity: badge?.rarity || 'common',
@@ -91,14 +150,15 @@ const normalizeStudent = (student, index = 0) => {
   const rank = Number(student?.rank || 0) || index + 1;
   return {
     id: student?._id || student?.id,
+    updatedAt: student?.updatedAt || student?.createdAt || null,
     name: student?.name || 'Student',
+    email: student?.email || '',
     initials: student?.initials || initialsFromName(student?.name),
     level: student?.level || EC.levelFromXp(xp),
     xp,
     rank,
     streak: Number(student?.streak || 0),
     tasks: Number(student?.tasksCompleted || student?.tasks || 0),
-    attendance: Number(student?.attendance || 0),
     color: student?.color || '#1a3a8f',
     heroRole: student?.heroRole || 'mage',
     regNo: student?.regNo || '',
@@ -107,6 +167,7 @@ const normalizeStudent = (student, index = 0) => {
     section: student?.section || '',
     motivationQuote: student?.motivationQuote || '',
     profileImageUrl: student?.profileImageUrl || '',
+    xpLog: Array.isArray(student?.xpLog) ? student.xpLog : [],
     badgeShowcase: (student?.badgeShowcase || []).map(b => b?._id || b?.id || b),
     unlockedBadges: (student?.unlockedBadges || []).map(b => b?._id || b?.id || b)
   };
@@ -121,6 +182,9 @@ const normalizeTask = (task) => {
 
   return {
     id: task?._id || task?.id,
+    createdAt: task?.createdAt || null,
+    updatedAt: task?.updatedAt || task?.createdAt || null,
+    createdById: task?.createdBy?._id || task?.createdBy?.id || task?.createdBy || '',
     title: task?.title || '',
     desc: task?.desc || '',
     diff: task?.diff || 'medium',
@@ -150,6 +214,12 @@ const normalizeTask = (task) => {
 const normalizeTaskSubmission = (submission) => ({
   id: submission?._id || submission?.id,
   taskId: submission?.task?._id || submission?.task || submission?.taskId,
+  task: submission?.task ? {
+    _id: submission?.task?._id || submission?.task?.id || submission?.taskId || '',
+    title: submission?.task?.title || submission?.taskTitle || '',
+    xp: Number(submission?.task?.xp || 0),
+    due: submission?.task?.due || null
+  } : null,
   studentId: submission?.student?._id || submission?.student || submission?.studentId,
   studentName: submission?.student?.name || submission?.studentName || '',
   studentInitials: submission?.student?.initials || initialsFromName(submission?.student?.name),
@@ -168,28 +238,35 @@ const normalizeTaskSubmission = (submission) => ({
   gradedBy: submission?.gradedBy?._id || submission?.gradedBy || null
 });
 
-const normalizeAttendance = (attendance) => ({
-  date: attendance?.date ? new Date(attendance.date).toDateString() : new Date().toDateString(),
-  records: (attendance?.records || []).map(record => ({
-    studentId: record?.student?._id || record?.student || record?.studentId,
-    status: record?.status || 'absent'
-  }))
-});
-
 const normalizeLeaveRequest = (request) => ({
   id: request?._id || request?.id,
   studentId: request?.student?._id || request?.student || request?.studentId,
+  createdAt: request?.createdAt || request?.submittedAt || null,
   studentName: request?.student?.name || request?.studentName || 'Student',
   type: request?.type || 'leave',
   reason: request?.reason || '',
   date: formatShortDate(request?.date),
   status: request?.status || 'pending',
   submittedAt: formatDateTime(request?.createdAt || request?.submittedAt),
+  reviewedAt: request?.reviewedAt || null,
+  reviewedById: request?.reviewedBy?._id || request?.reviewedBy?.id || request?.reviewedBy || '',
   rejectReason: request?.rejectionReason || request?.rejectReason || ''
+});
+
+const normalizeAttendance = (attendance) => ({
+  date: attendance?.date || '',
+  records: (attendance?.records || []).map(record => ({
+    studentId: record?.student?._id || record?.student || record?.studentId || '',
+    studentName: record?.student?.name || record?.studentName || '',
+    status: record?.status || 'absent'
+  }))
 });
 
 const normalizeAnnouncement = (announcement) => ({
   id: announcement?._id || announcement?.id,
+  createdAt: announcement?.createdAt || announcement?.time || null,
+  updatedAt: announcement?.updatedAt || announcement?.createdAt || announcement?.time || null,
+  postedById: announcement?.postedBy?._id || announcement?.postedBy?.id || announcement?.postedBy || '',
   title: announcement?.title || '',
   body: announcement?.body || '',
   pinned: Boolean(announcement?.pinned),
@@ -199,6 +276,7 @@ const normalizeAnnouncement = (announcement) => ({
         id: comment?._id || comment?.id || `${comment?.from?._id || comment?.from}-${comment?.createdAt || ''}`,
         text: comment?.text || '',
         parentCommentId: comment?.parentCommentId || '',
+        rawCreatedAt: comment?.createdAt || null,
         createdAt: formatRelativeTime(comment?.createdAt),
         authorId: comment?.from?._id || comment?.from || '',
         authorName: comment?.from?.name || 'User',
@@ -211,6 +289,9 @@ const normalizeAnnouncement = (announcement) => ({
 
 const normalizePoll = (poll) => ({
   id: poll?._id || poll?.id,
+  createdAtRaw: poll?.createdAt || null,
+  updatedAt: poll?.updatedAt || poll?.createdAt || null,
+  createdById: poll?.createdBy?._id || poll?.createdBy?.id || poll?.createdBy || '',
   question: poll?.question || '',
   options: (poll?.options || []).map(option => ({
     text: option?.text || '',
@@ -225,16 +306,11 @@ const normalizePoll = (poll) => ({
   closedAt: poll?.closedAt || null
 });
 
-const normalizeSquad = (squad) => ({
-  id: squad?._id || squad?.id,
-  name: squad?.name || '',
-  members: (squad?.members || []).map(member => member?._id || member?.id || member),
-  totalXp: Number(squad?.totalXp || 0),
-  rank: Number(squad?.rank || 0)
-});
-
 const normalizeResource = (resource) => ({
   id: resource?._id || resource?.id,
+  createdAt: resource?.createdAt || resource?.uploadedAt || null,
+  updatedAt: resource?.updatedAt || resource?.createdAt || resource?.uploadedAt || null,
+  uploadedById: resource?.uploadedBy?._id || resource?.uploadedBy?.id || resource?.uploadedBy || '',
   name: resource?.name || '',
   type: resource?.type || 'PDF',
   cat: resource?.cat || 'General',
@@ -244,11 +320,17 @@ const normalizeResource = (resource) => ({
 });
 
 const normalizeChatMessage = (message) => {
-  const reactionValue = message?.reactions?.['👍🏼'];
+  const reactionValue = message?.reactions?.['????'];
+  const myId = String(EC?.state?.currentUser?.id || EC?.state?.myId || '');
   let reactionCount = 0;
+  let reactedByMe = false;
 
   if (typeof reactionValue === 'number') reactionCount = reactionValue;
-  else if (Array.isArray(reactionValue)) reactionCount = reactionValue.length;
+  else if (Array.isArray(reactionValue)) {
+    const reactionUsers = reactionValue.map(String);
+    reactionCount = reactionUsers.length;
+    reactedByMe = myId ? reactionUsers.includes(myId) : false;
+  }
 
   return {
     id: message?._id || message?.id,
@@ -263,7 +345,8 @@ const normalizeChatMessage = (message) => {
     quoted: message?.quoted?.text
       ? `${message?.quoted?.from || 'User'}: ${message.quoted.text}`
       : '',
-    reactionCount
+    reactionCount,
+    reactedByMe
   };
 };
 
@@ -295,6 +378,8 @@ const normalizeSeason = (season) => {
 
 const normalizeMonthTaskBatch = (batch) => ({
   id: batch?.id || batch?._id,
+  createdAt: batch?.createdAt || null,
+  updatedAt: batch?.updatedAt || batch?.createdAt || null,
   monthName: batch?.monthName || '',
   year: Number(batch?.year || 0),
   totalTasks: Number(batch?.totalTasks || 0),
@@ -359,11 +444,15 @@ const normalizeMonthTask = (task) => ({
   difficulty: task?.difficulty || 'Medium',
   marks: Number(task?.marks || 0),
   category: task?.category || 'General',
+  taskDate: task?.taskDate || '',
+  taskLink: task?.taskLink || '',
+  frequency: task?.frequency === 'daily' ? 'daily' : 'once',
   needsSubmission: Boolean(task?.needsSubmission),
   answerMode: task?.answerMode || (task?.needsSubmission ? 'file' : 'done'),
   allowLinkSubmission: Boolean(task?.allowLinkSubmission),
   allowTextSubmission: Boolean(task?.allowTextSubmission),
   allowFileUpload: task?.allowFileUpload !== false,
+  completedDays: Number(task?.completedDays || 0),
   submission: task?.submission ? normalizeMonthTaskSubmission(task.submission) : null
 });
 
@@ -393,6 +482,7 @@ const normalizeMonthTaskWarning = (warning) => ({
   batchId: warning?.batchId || warning?.batch?._id || warning?.batch,
   batchTitle: warning?.batchTitle || '',
   warningType: warning?.warningType || '',
+  createdAt: warning?.createdAt || warning?.triggeredAt || null,
   triggeredAt: warning?.triggeredAt || null,
   explanationText: warning?.explanationText || '',
   submittedAt: warning?.submittedAt || null,
@@ -401,6 +491,13 @@ const normalizeMonthTaskWarning = (warning) => ({
 });
 
 EC.api = {
+  formatDateTime,
+
+  async checkUpdates(since) {
+    const res = await this._get(`/check-updates?since=${since}`);
+    return res;
+  },
+
   async login(email, password, role) {
     if (!BACKEND_ENABLED) {
       throw new Error('Backend is disabled.');
@@ -421,30 +518,109 @@ EC.api = {
     return await this._post('/auth/register', { name, email, password, role });
   },
 
-  async bootstrap() {
-    if (!BACKEND_ENABLED || !EC.state.authToken) return;
-
-    const today = new Date().toISOString().split('T')[0];
-    const role = EC.state.currentRole;
-    const requests = [
-      ['students', role === 'teacher' ? this.getStudents() : this.getLeaderboard('alltime')],
-      ['tasks', this.getTasks()],
-      ['attendance', this.getAttendance(today)],
-      ['leaveRequests', this.getLeaveRequests()],
-      ['announcements', this.getAnnouncements()],
-      ['polls', this.getPolls()],
-      ['squads', this.getSquads()],
-      ['resources', this.getResources()]
-    ];
-
-    if (role === 'student' && EC.state.myId) {
-      requests.push(['profile', this.getProfile(EC.state.myId)]);
+  async googleLogin(credential, role) {
+    if (!BACKEND_ENABLED) {
+      throw new Error('Backend is disabled.');
     }
 
-    const results = await Promise.allSettled(requests.map(([, promise]) => promise));
+    return await this._post('/auth/google', { credential, role });
+  },
+
+  async getGoogleConfig() {
+    if (!BACKEND_ENABLED) {
+      return { clientId: '' };
+    }
+
+    const res = await this._get('/auth/google-config');
+    return res.data || { clientId: '' };
+  },
+
+  async bootstrap(force = false) {
+    if (!BACKEND_ENABLED || !EC.state.authToken) return;
+
+    const now = Date.now();
+    const lastSync = EC.state._lastFullBootstrap || 0;
+
+    // Smart update: if not forced and we have a lastSync, check if anything changed
+    if (!force && lastSync > 0) {
+      try {
+        const updateCheck = await this.checkUpdates(lastSync);
+        if (updateCheck.success && !updateCheck.hasUpdates) {
+          // No updates needed, but update the timestamp to prevent immediate re-checks
+          if (now - lastSync < 30000) return;
+          EC.state._lastFullBootstrap = now;
+          return;
+        }
+      } catch (err) {
+        // Fallback to full bootstrap if check fails
+      }
+    }
+
+    if (!force && lastSync && (now - lastSync < 15000)) {
+      return;
+    }
+    EC.state._lastFullBootstrap = now;
+
+    const role = EC.state.currentRole;
+    const page = EC.state.currentPage || 'dashboard';
+
+    // Define which data is critical for which page
+    const pageDataMap = {
+      dashboard: ['students', 'tasks', 'announcements'],
+      tasks: ['tasks'],
+      'month-tasks': [],
+      gradebook: ['students', 'tasks'],
+      students: ['students'],
+      leaderboard: ['students'],
+      announcements: ['announcements'],
+      'leave-od': ['leaveRequests'],
+      explanations: [],
+      poll: ['polls'],
+      chat: [],
+      schedule: [],
+      resources: ['resources'],
+      bookmarks: [],
+      export: ['students', 'tasks'],
+      profile: [],
+      review: ['tasks']
+    };
+
+    const needed = new Set(['students']); // Always need students for basic info
+    (pageDataMap[page] || []).forEach(k => needed.add(k));
+
+    if (force) {
+      ['tasks', 'leaveRequests', 'announcements', 'polls', 'resources'].forEach(k => needed.add(k));
+    }
+
+    const requests = [];
+    const keys = [];
+
+    const addRequest = (key, promise) => {
+      // Only fetch if forced or if data is missing or if we suspect updates
+      requests.push(promise);
+      keys.push(key);
+    };
+
+    if (needed.has('students')) {
+      addRequest('students', role === 'teacher' ? this.getStudents() : this.getLeaderboard('alltime'));
+    }
+    if (needed.has('tasks')) addRequest('tasks', this.getTasks());
+    if (needed.has('leaveRequests')) addRequest('leaveRequests', this.getLeaveRequests());
+    if (needed.has('announcements')) addRequest('announcements', this.getAnnouncements());
+    if (needed.has('polls')) addRequest('polls', this.getPolls());
+    if (needed.has('resources')) addRequest('resources', this.getResources());
+
+    if (role === 'student' && EC.state.myId && (!EC.state.currentUser || force)) {
+      requests.push(this.getProfile(EC.state.myId));
+      keys.push('profile');
+    }
+
+    if (requests.length === 0) return;
+
+    const results = await Promise.allSettled(requests);
     results.forEach((result, index) => {
       if (result.status !== 'fulfilled') return;
-      const key = requests[index][0];
+      const key = keys[index];
       const value = result.value;
 
       if (key === 'profile') {
@@ -458,7 +634,13 @@ EC.api = {
         return;
       }
 
-      EC.state[key] = value;
+      // Handle paginated responses
+      if (value && value.data && value.pagination) {
+        EC.state[key] = value.data;
+        EC.state[`${key}Pagination`] = value.pagination;
+      } else {
+        EC.state[key] = value;
+      }
     });
 
     const me = EC.state.students.find(student => student.id === EC.state.myId);
@@ -474,17 +656,19 @@ EC.api = {
 
   async getProfile(id) {
     const res = await this._get(`/users/${id}`);
-    return res.data;
+    return normalizeStudent(res.data);
   },
 
   async getStudents() {
-    const res = await this._get('/users/students');
-    return (res.data || []).map((student, index) => normalizeStudent(student, index));
+    const students = await this._collectPaginated('/users/students', normalizeStudent);
+    return students.map((student, index) => ({
+      ...student,
+      rank: Number(student.rank || 0) || index + 1
+    }));
   },
 
   async getTasks() {
-    const res = await this._get('/tasks');
-    return (res.data || []).map(normalizeTask);
+    return await this._collectPaginated('/tasks', normalizeTask);
   },
 
   async createTask(data) {
@@ -534,6 +718,10 @@ EC.api = {
     return (res.data || []).map(normalizeTaskSubmission);
   },
 
+  async getAllPendingSubmissions() {
+    return await this._collectPaginated('/tasks/submissions/pending', normalizeTaskSubmission);
+  },
+
   async requestTaskRedo(id, data) {
     try {
       const res = await this._post(`/tasks/${id}/redo`, data);
@@ -554,32 +742,26 @@ EC.api = {
     return normalizeTask(res.data);
   },
 
-  async getAttendance(date) {
-    const res = await this._get(`/attendance?date=${encodeURIComponent(date)}`);
+  async getLeaveRequests() {
+    const endpoint = EC.state.currentRole === 'teacher' ? '/leave' : '/leave/my';
+    const res = await this._get(endpoint);
+    return (res.data || []).map(normalizeLeaveRequest);
+  },
+
+  async getAttendance(date = '') {
+    const suffix = date ? `?date=${encodeURIComponent(date)}` : '';
+    const res = await this._get(`/attendance${suffix}`);
     return normalizeAttendance(res.data);
   },
 
   async markAttendance(data) {
-    const payload = {
-      date: data?.date,
-      records: (data?.records || []).map(record => ({
-        student: record.studentId || record.student,
-        status: record.status
-      }))
-    };
-    const res = await this._post('/attendance', payload);
+    const res = await this._post('/attendance', data);
     return normalizeAttendance(res.data);
   },
 
   async selfMarkAttendance() {
     const res = await this._post('/attendance/self-mark', {});
     return normalizeAttendance(res.data);
-  },
-
-  async getLeaveRequests() {
-    const endpoint = EC.state.currentRole === 'teacher' ? '/leave' : '/leave/my';
-    const res = await this._get(endpoint);
-    return (res.data || []).map(normalizeLeaveRequest);
   },
 
   async submitLeave(data) {
@@ -612,7 +794,7 @@ EC.api = {
     return normalizeChatMessage(res.data);
   },
 
-  async reactChatMessage(id, emoji = '👍🏼') {
+  async reactChatMessage(id, emoji = '????') {
     const res = await this._post(`/chat/${id}/react`, { emoji });
     return normalizeChatMessage(res.data);
   },
@@ -643,9 +825,6 @@ EC.api = {
 
   async getLeaderboard(type = 'alltime') {
     const res = await this._get(`/leaderboard?type=${encodeURIComponent(type)}`);
-    if (type === 'squads') {
-      return (res.data || []).map(normalizeSquad);
-    }
     return (res.data || []).map((student, index) => normalizeStudent(student, index));
   },
 
@@ -673,28 +852,8 @@ EC.api = {
     return await this._delete(`/polls/${id}`);
   },
 
-  async getSquads() {
-    const res = await this._get('/squads');
-    return (res.data || []).map(normalizeSquad);
-  },
-
-  async createSquad(data) {
-    const res = await this._post('/squads', data);
-    return normalizeSquad(res.data);
-  },
-
-  async updateSquad(id, data) {
-    const res = await this._put(`/squads/${id}`, data);
-    return normalizeSquad(res.data);
-  },
-
-  async deleteSquad(id) {
-    return await this._delete(`/squads/${id}`);
-  },
-
   async getResources() {
-    const res = await this._get('/resources');
-    return (res.data || []).map(normalizeResource);
+    return await this._collectPaginated('/resources', normalizeResource);
   },
 
   async createResource(data) {
@@ -776,8 +935,9 @@ EC.api = {
     };
   },
 
-  async getMonthTasks(batchId) {
-    const res = await this._get(`/month-tasks/batch/${batchId}/tasks`);
+  async getMonthTasks(batchId, date = '') {
+    const dateQuery = date ? `?date=${encodeURIComponent(date)}` : '';
+    const res = await this._get(`/month-tasks/batch/${batchId}/tasks${dateQuery}`);
     return (res.data || []).map(normalizeMonthTask);
   },
 
@@ -791,14 +951,15 @@ EC.api = {
     return (res.data || []).map(normalizeMonthTaskSubmission);
   },
 
-  async startMonthTask(taskId) {
-    const res = await this._post('/month-tasks/start', { taskId });
+  async startMonthTask(taskId, date = '') {
+    const res = await this._post('/month-tasks/start', { taskId, date });
     return normalizeMonthTaskSubmission(res.data);
   },
 
   async submitMonthTask(data) {
     const formData = new FormData();
     formData.append('taskId', data?.taskId || '');
+    if (data?.date) formData.append('date', data.date);
     if (data?.proofUrl) formData.append('proofUrl', data.proofUrl);
     if (data?.responseText) formData.append('responseText', data.responseText);
     if (data?.file instanceof File) formData.append('file', data.file);
@@ -872,6 +1033,58 @@ EC.api = {
     return normalizeMonthTaskBatch(res.data);
   },
 
+  async getExcelWorkbook(workbookKey = 'month-task-workbook') {
+    const res = await this._get(`/excel/workbooks/${encodeURIComponent(workbookKey)}`);
+    return res.data || null;
+  },
+
+  async createExcelSheet(workbookKey, title = '') {
+    const res = await this._post(`/excel/workbooks/${encodeURIComponent(workbookKey)}/sheets`, { title });
+    return res.data || null;
+  },
+
+  async saveExcelSheet(workbookKey, sheetId, data) {
+    const res = await this._put(`/excel/workbooks/${encodeURIComponent(workbookKey)}/sheets/${encodeURIComponent(sheetId)}`, data);
+    return res.data || null;
+  },
+
+  async deleteExcelSheet(workbookKey, sheetId) {
+    return await this._delete(`/excel/workbooks/${encodeURIComponent(workbookKey)}/sheets/${encodeURIComponent(sheetId)}`);
+  },
+
+  async updateExcelPermissions(workbookKey, data) {
+    const res = await this._put(`/excel/workbooks/${encodeURIComponent(workbookKey)}/permissions`, data);
+    return res.data || null;
+  },
+
+  async _collectPaginated(endpoint, normalize, limit = 100) {
+    const items = [];
+    let page = 1;
+    let total = Infinity;
+
+    while (items.length < total) {
+      const joiner = endpoint.includes('?') ? '&' : '?';
+      const response = await this._get(`${endpoint}${joiner}page=${page}&limit=${limit}`);
+      const pageItems = Array.isArray(response?.data) ? response.data : [];
+      const normalizedItems = pageItems.map((entry, index) => normalize(entry, items.length + index));
+
+      items.push(...normalizedItems);
+
+      if (!response?.pagination) {
+        break;
+      }
+
+      total = Number(response.pagination.total || items.length);
+      if (!normalizedItems.length || items.length >= total) {
+        break;
+      }
+
+      page += 1;
+    }
+
+    return items;
+  },
+
   async exportPdf(type) {
     const blob = await this._blob(`/export/pdf?type=${encodeURIComponent(type)}`);
     this._downloadBlob(blob, `${type}.pdf`);
@@ -884,6 +1097,11 @@ EC.api = {
 
   async updateProfile(id, data) {
     const res = await this._put(`/users/${id}`, data);
+    return normalizeStudent(res.data);
+  },
+
+  async updateStudentAdmin(id, data) {
+    const res = await this._put(`/users/${id}/admin`, data);
     return res.data;
   },
 
@@ -966,23 +1184,96 @@ EC.api = {
     return { success: true };
   },
 
+  async ensureBackendReady(force = false) {
+    if (!BACKEND_ENABLED) {
+      return { apiBase: '', status: 'disabled', db: 'disabled' };
+    }
+
+    if (!force && backendHealthPromise) {
+      return await backendHealthPromise;
+    }
+
+    const probe = async () => {
+      const candidates = Array.from(new Set([
+        ...(resolvedApiBase ? [resolvedApiBase] : []),
+        ...EXPLICIT_API_BASES,
+        ...API_BASE_CANDIDATES
+      ]));
+      let lastReachable = null;
+
+      for (const baseUrl of candidates) {
+        const healthUrl = `${withoutApiPath(baseUrl)}/health`;
+        try {
+          const response = await fetch(healthUrl, { cache: 'no-store' });
+          if (!response.ok) continue;
+
+          const payload = await response.json().catch(() => ({}));
+          const dbStatus = String(payload?.db || '').toLowerCase();
+          lastReachable = {
+            apiBase: baseUrl,
+            status: String(payload?.status || 'ok'),
+            db: dbStatus || 'unknown'
+          };
+
+          resolvedApiBase = baseUrl;
+          try {
+            localStorage.setItem('ec_api_base', baseUrl);
+          } catch (error) {
+            // Ignore storage failures.
+          }
+
+          if (dbStatus === 'connected' || dbStatus === 'unknown') {
+            return lastReachable;
+          }
+        } catch (error) {
+          // Keep probing.
+        }
+      }
+
+      if (lastReachable) return lastReachable;
+      throw new Error([
+        'Could not reach the backend service.',
+        EXPLICIT_API_BASES.length
+          ? `Checked: ${EXPLICIT_API_BASES[0]}`
+          : 'Set `window.ELITE_CLASS_API_URL`, `localStorage.ec_api_base`, or open the app from the backend server URL.'
+      ].join(' '));
+    };
+
+    backendHealthPromise = probe().finally(() => {
+      backendHealthPromise = null;
+    });
+
+    return await backendHealthPromise;
+  },
+
   async _fetchWithBaseFallback(endpoint, options = {}) {
     let lastError = null;
+    const candidates = Array.from(new Set([
+      ...(resolvedApiBase ? [resolvedApiBase] : []),
+      ...EXPLICIT_API_BASES,
+      ...API_BASE_CANDIDATES
+    ]));
 
-    for (const baseUrl of API_BASE_CANDIDATES) {
+    for (const baseUrl of candidates) {
       try {
-        const response = await fetch(`${baseUrl}${endpoint}`, options);
+        const response = await fetch(withApiPath(baseUrl, endpoint), options);
 
         if (!response.ok) {
           const sameOriginApiBase = !/^https?:\/\/(localhost|127\.0\.0\.1):5050\/api$/i.test(baseUrl)
             && (baseUrl === '/api' || baseUrl === `${window.location.origin}/api`);
           if (sameOriginApiBase && [404, 405, 501].includes(response.status)) {
-            lastError = new Error(`Skipping ${baseUrl}${endpoint} due to status ${response.status}`);
+            lastError = new Error(`Skipping ${withApiPath(baseUrl, endpoint)} due to status ${response.status}`);
             continue;
           }
           throw new Error(await this._readError(response));
         }
 
+        resolvedApiBase = baseUrl;
+        try {
+          localStorage.setItem('ec_api_base', baseUrl);
+        } catch (error) {
+          // Ignore storage failures.
+        }
         return response;
       } catch (error) {
         lastError = error;
@@ -993,9 +1284,23 @@ EC.api = {
       }
     }
 
-    throw new Error(
-      'Could not reach the backend server on port 5050. Make sure the backend is running and open the frontend from localhost or 127.0.0.1.'
-    );
+    try {
+      const backendState = await this.ensureBackendReady(true);
+      if (backendState?.db && backendState.db !== 'connected') {
+        throw new Error('Backend server is reachable, but the database is still connecting. Wait a few seconds and retry.');
+      }
+    } catch (healthError) {
+      if (healthError?.message && !/Could not reach the backend service/i.test(healthError.message)) {
+        throw healthError;
+      }
+    }
+
+    throw new Error([
+      'Could not reach the backend service.',
+      EXPLICIT_API_BASES.length
+        ? `Checked: ${EXPLICIT_API_BASES[0]}`
+        : 'Set `window.ELITE_CLASS_API_URL`, `localStorage.ec_api_base`, or open the app from the backend server URL.'
+    ].join(' '));
   },
 
   async _readError(response) {
