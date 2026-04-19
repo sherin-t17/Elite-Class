@@ -4,6 +4,8 @@
    ============================================================ */
 window.EC = window.EC || {};
 
+const AUTH_STORAGE_KEY = 'ec_user';
+
 const resetUserScopedState = () => {
   EC.state.currentUser = null;
   EC.state.currentRole = null;
@@ -37,7 +39,7 @@ const resetUserScopedState = () => {
 
 EC.auth = {
   init() {
-    const saved = sessionStorage.getItem('ec_user');
+    const saved = localStorage.getItem(AUTH_STORAGE_KEY);
     if (saved) {
       try {
         const data = JSON.parse(saved);
@@ -51,7 +53,7 @@ EC.auth = {
         EC.state.myRank      = data.user.rank   || 0;
         return true;
       } catch (e) {
-        sessionStorage.removeItem('ec_user');
+        localStorage.removeItem(AUTH_STORAGE_KEY);
       }
     }
 
@@ -60,7 +62,7 @@ EC.auth = {
       try {
         const handoffRaw = localStorage.getItem(`ec_session_handoff_${handoffKey}`);
         if (handoffRaw) {
-          sessionStorage.setItem('ec_user', handoffRaw);
+          localStorage.setItem(AUTH_STORAGE_KEY, handoffRaw);
           localStorage.removeItem(`ec_session_handoff_${handoffKey}`);
           const cleanUrl = new URL(window.location.href);
           cleanUrl.searchParams.delete('sessionKey');
@@ -120,7 +122,7 @@ EC.auth = {
     EC.state.myLevel     = data.user.level || EC.levelFromXp(data.user.xp || 0);
     EC.state.myStreak    = data.user.streak || 0;
     EC.state.myRank      = data.user.rank   || 0;
-    sessionStorage.setItem('ec_user', JSON.stringify(data));
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
     EC.app?.loadBookmarks?.();
   },
 
@@ -129,7 +131,7 @@ EC.auth = {
     EC.notifications?.stopPolling?.();
 
     // Clear session
-    sessionStorage.removeItem('ec_user');
+    localStorage.removeItem(AUTH_STORAGE_KEY);
     resetUserScopedState();
 
     // Hide app

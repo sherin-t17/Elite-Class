@@ -28,7 +28,10 @@ const allowedOriginPatterns = [
 ];
 
 const configuredOrigins = [
-  process.env.CLIENT_URL,
+  ...(process.env.CLIENT_URL || '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean),
   ...(process.env.CORS_ORIGIN || '')
     .split(',')
     .map(origin => origin.trim())

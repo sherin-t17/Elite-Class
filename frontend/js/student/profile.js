@@ -299,12 +299,12 @@ EC.studentProfile = {
       EC.state.myLevel = student.level;
       EC.state.myRank = student.rank;
       EC.state.myStreak = student.streak;
-      const saved = sessionStorage.getItem('ec_user');
+      const saved = localStorage.getItem('ec_user');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
           parsed.user = { ...parsed.user, ...student };
-          sessionStorage.setItem('ec_user', JSON.stringify(parsed));
+          localStorage.setItem('ec_user', JSON.stringify(parsed));
         } catch (error) {
           // Ignore malformed session data.
         }
